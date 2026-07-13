@@ -1,0 +1,20 @@
+<!-- @dsCard group="Brand" viewport="700x150" name="Corner radius" subtitle="0.45rem base — buttons 7px, cards 10px, badges pill" -->
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8" /><link rel="stylesheet" href="../styles.css" />
+<style>
+  body{margin:0;padding:20px;background:var(--background);color:var(--foreground);font-family:var(--font-sans);}
+  .row{display:flex;gap:18px;align-items:flex-end;}
+  .item{display:flex;flex-direction:column;align-items:center;gap:8px;}
+  .box{width:72px;height:56px;background:var(--muted);border:1px solid var(--border);}
+  .tok{font-family:var(--font-mono);font-size:10px;color:var(--muted-foreground);}
+</style></head>
+<body>
+  <div class="row">
+    <div class="item"><div class="box" style="border-radius:var(--radius-sm)"></div><span class="tok">sm · 4px</span></div>
+    <div class="item"><div class="box" style="border-radius:var(--radius-md)"></div><span class="tok">md · 6px</span></div>
+    <div class="item"><div class="box" style="border-radius:var(--radius-lg)"></div><span class="tok">lg · 7px (btn/input)</span></div>
+    <div class="item"><div class="box" style="border-radius:var(--radius-xl)"></div><span class="tok">xl · 10px (card)</span></div>
+    <div class="item"><div class="box" style="border-radius:var(--radius-4xl)"></div><span class="tok">4xl (badge)</span></div>
+    <div class="item"><div class="box" style="border-radius:var(--radius-full)"></div><span class="tok">full</span></div>
+  </div>
+</body></html>

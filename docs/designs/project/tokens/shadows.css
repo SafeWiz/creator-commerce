@@ -1,0 +1,23 @@
+/* ============================================================
+   SHADOWS & RINGS — Creator Commerce
+   Restrained. Elevation is carried mostly by 1px rings (ring-1
+   ring-foreground/10) rather than heavy drop shadows. Cards get a
+   hairline ring; popovers/sheets get a soft shadow.
+   ============================================================ */
+:root {
+  /* Hairline ring used on cards (ring-1 ring-foreground/10) */
+  --ring-card: 0 0 0 1px oklch(0.153 0.006 107.1 / 0.10);
+  --ring-hover: 0 0 0 1px oklch(0.153 0.006 107.1 / 0.16);
+
+  /* Focus ring (3px translucent) */
+  --focus-ring: 0 0 0 3px oklch(0.737 0.021 106.9 / 0.5);
+
+  /* Drop shadows */
+  --shadow-xs: 0 1px 2px 0 oklch(0.153 0.006 107.1 / 0.05);
+  --shadow-sm: 0 1px 3px 0 oklch(0.153 0.006 107.1 / 0.08),
+               0 1px 2px -1px oklch(0.153 0.006 107.1 / 0.08);
+  --shadow:    0 4px 6px -1px oklch(0.153 0.006 107.1 / 0.08),
+               0 2px 4px -2px oklch(0.153 0.006 107.1 / 0.06);
+  --shadow-lg: 0 10px 15px -3px oklch(0.153 0.006 107.1 / 0.10),
+               0 4px 6px -4px oklch(0.153 0.006 107.1 / 0.08);
+}

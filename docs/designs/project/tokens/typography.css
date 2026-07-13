@@ -1,0 +1,46 @@
+/* ============================================================
+   TYPOGRAPHY — Creator Commerce
+   Nunito Sans (UI/body) · Roboto (headings) · Geist Mono (numerals)
+   The app is dense and utilitarian: small base size (14px), medium
+   weights, tight tracking on headings.
+   ============================================================ */
+:root {
+  --font-sans: 'Nunito Sans', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-heading: 'Roboto', var(--font-sans);
+  --font-mono: 'Geist Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+
+  /* Type scale — UI runs small (text-sm = 14px is the baseline) */
+  --text-xs:   0.75rem;   /* 12px — badges, meta, table caption */
+  --text-sm:   0.875rem;  /* 14px — DEFAULT body / controls */
+  --text-base: 1rem;      /* 16px — card title, inputs on mobile */
+  --text-lg:   1.125rem;  /* 18px — section lead */
+  --text-xl:   1.25rem;   /* 20px */
+  --text-2xl:  1.5rem;    /* 24px — page heading */
+  --text-3xl:  1.875rem;  /* 30px — hero / KPI number */
+  --text-4xl:  2.25rem;   /* 36px — marketing */
+  --text-5xl:  3rem;      /* 48px — marketing hero */
+
+  /* Weights */
+  --weight-normal: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --weight-bold: 700;
+  --weight-extrabold: 800;
+
+  /* Line heights */
+  --leading-none: 1;
+  --leading-tight: 1.15;
+  --leading-snug: 1.3;
+  --leading-normal: 1.5;
+  --leading-relaxed: 1.65;
+
+  /* Tracking */
+  --tracking-tight: -0.02em;
+  --tracking-normal: 0em;
+  --tracking-wide: 0.02em;
+
+  /* Semantic roles */
+  --text-body: var(--text-sm);
+  --text-heading-weight: var(--weight-medium);   /* Roboto medium, not bold */
+  --text-price: var(--font-mono);
+}

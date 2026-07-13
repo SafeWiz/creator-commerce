@@ -1,0 +1,171 @@
+<!-- @dsCard group="Storefront" viewport="1280x820" name="Creator storefront" subtitle="Public /@handle grid, product detail, and checkout success" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Creator Commerce — Storefront</title>
+<link rel="stylesheet" href="../../styles.css" />
+<style>
+  html, body { height: 100%; margin: 0; }
+  #root { min-height: 100vh; background: var(--background); }
+  .cc-prodcard { transition: box-shadow .15s ease, transform .05s ease; }
+  .cc-prodcard:hover { box-shadow: var(--ring-hover); }
+  a { color: var(--primary); }
+  a:hover { color: color-mix(in oklch, var(--primary), var(--foreground) 15%); }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+<script src="../../_ds_bundle.js"></script>
+<script src="../dashboard/data.js"></script>
+<script type="text/babel">
+const NS = window.CreatorCommerceDesignSystem_0c16ec;
+const { Button, Badge, Card, CardContent, Separator } = NS;
+const { useState, useEffect, useRef } = React;
+const d = window.CC_DATA;
+
+function toPascal(s){return s.split("-").map(w=>w[0].toUpperCase()+w.slice(1)).join("");}
+function Icon({ name, size = 16, style }) {
+  const ref = useRef(null);
+  useEffect(() => {
+    const h = ref.current; if (!h || !window.lucide) return;
+    const node = (window.lucide.icons||{})[toPascal(name)];
+    h.innerHTML = "";
+    if (node && window.lucide.createElement) {
+      const svg = window.lucide.createElement(node);
+      svg.setAttribute("width", size); svg.setAttribute("height", size); svg.style.display="block";
+      h.appendChild(svg);
+    }
+  }, [name, size]);
+  return <span ref={ref} style={{ display:"inline-flex", alignItems:"center", ...style }} />;
+}
+
+const COVER = ["#e7e6df", "#dfe4dc", "#e5e2da", "#dde2e0", "#e6e3dd", "#dce3de"];
+function Cover({ i, type, big }) {
+  return (
+    <div style={{ aspectRatio: big ? "16/10" : "3/2", background:`linear-gradient(135deg, ${COVER[i%COVER.length]}, color-mix(in oklch, ${COVER[i%COVER.length]}, black 8%))`, display:"flex", alignItems:"center", justifyContent:"center", color:"var(--olive-400)" }}>
+      <Icon name={type==="PDF"?"file-text":type==="Audio"?"audio-lines":"package"} size={big?40:26} />
+    </div>
+  );
+}
+
+function Header({ onHome }) {
+  return (
+    <header style={{ borderBottom:"1px solid var(--border)", background:"var(--background)", position:"sticky", top:0, zIndex:10 }}>
+      <div style={{ maxWidth:1080, margin:"0 auto", padding:"14px 24px", display:"flex", alignItems:"center", gap:14 }}>
+        <button onClick={onHome} style={{ display:"flex", alignItems:"center", gap:12, border:0, background:"transparent", cursor:"pointer", padding:0 }}>
+          <span style={{ width:40, height:40, borderRadius:9999, background:"var(--olive-200)", color:"var(--foreground)", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"var(--font-heading)", fontWeight:700, fontSize:16 }}>GI</span>
+          <span style={{ textAlign:"left" }}>
+            <div style={{ fontFamily:"var(--font-heading)", fontWeight:500, fontSize:16, letterSpacing:"-0.01em", color:"var(--foreground)" }}>Gabi Ionescu</div>
+            <div style={{ fontFamily:"var(--font-mono)", fontSize:12, color:"var(--muted-foreground)" }}>@gabi</div>
+          </span>
+        </button>
+        <div style={{ flex:1 }} />
+        <Button variant="outline" size="sm"><Icon name="heart" size={14} />Wishlist</Button>
+        <Button variant="ghost" size="sm">Sign in</Button>
+      </div>
+    </header>
+  );
+}
+
+function Grid({ onOpen }) {
+  return (
+    <div style={{ maxWidth:1080, margin:"0 auto", padding:"32px 24px 64px", fontFamily:"var(--font-sans)", color:"var(--foreground)" }}>
+      <div style={{ marginBottom:24 }}>
+        <h1 style={{ fontFamily:"var(--font-heading)", fontWeight:500, fontSize:30, letterSpacing:"-0.02em", margin:0 }}>Presets, templates &amp; sounds by Gabi</h1>
+        <p style={{ color:"var(--muted-foreground)", fontSize:15, margin:"6px 0 0", maxWidth:"60ch" }}>Digital products for photographers and creatives. Instant download after checkout.</p>
+      </div>
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(3, 1fr)", gap:20 }}>
+        {d.storeProducts.map((p, i) => (
+          <button key={p.id} onClick={() => onOpen(p, i)} className="cc-prodcard" style={{ textAlign:"left", border:0, padding:0, background:"var(--card)", borderRadius:"var(--radius-xl)", boxShadow:"var(--ring-card)", overflow:"hidden", cursor:"pointer", display:"flex", flexDirection:"column" }}>
+            <Cover i={i} type={p.type} />
+            <div style={{ padding:16, display:"flex", flexDirection:"column", gap:6, flex:1 }}>
+              <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", gap:8 }}>
+                <span style={{ fontFamily:"var(--font-heading)", fontWeight:500, fontSize:15 }}>{p.name}</span>
+                <Badge variant="outline">{p.type}</Badge>
+              </div>
+              <p style={{ fontSize:13, color:"var(--muted-foreground)", margin:0, lineHeight:1.5, flex:1 }}>{p.blurb}</p>
+              <div style={{ fontFamily:"var(--font-mono)", fontSize:16, fontWeight:500, marginTop:4 }}>{p.price}</div>
+            </div>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function Detail({ product, index, onBack, onBuy }) {
+  return (
+    <div style={{ maxWidth:1080, margin:"0 auto", padding:"24px 24px 64px", fontFamily:"var(--font-sans)", color:"var(--foreground)" }}>
+      <button onClick={onBack} style={{ display:"inline-flex", alignItems:"center", gap:6, border:0, background:"transparent", cursor:"pointer", color:"var(--muted-foreground)", fontSize:13, padding:0, marginBottom:16 }}>
+        <Icon name="chevron-left" size={15} />All products
+      </button>
+      <div style={{ display:"grid", gridTemplateColumns:"1.2fr 1fr", gap:32, alignItems:"start" }}>
+        <div style={{ borderRadius:"var(--radius-xl)", overflow:"hidden", boxShadow:"var(--ring-card)" }}>
+          <Cover i={index} type={product.type} big />
+        </div>
+        <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
+          <div>
+            <Badge variant="outline" style={{ marginBottom:10 }}>{product.type}</Badge>
+            <h1 style={{ fontFamily:"var(--font-heading)", fontWeight:500, fontSize:28, letterSpacing:"-0.02em", margin:0 }}>{product.name}</h1>
+            <div style={{ fontFamily:"var(--font-mono)", fontSize:24, fontWeight:500, marginTop:10 }}>{product.price}</div>
+          </div>
+          <p style={{ fontSize:15, lineHeight:1.6, color:"var(--foreground)", margin:0 }}>{product.blurb} Delivered as an instant download the moment your payment clears — buy once, keep forever.</p>
+          <div style={{ display:"flex", gap:10 }}>
+            <Button size="lg" style={{ flex:1 }} onClick={onBuy}><Icon name="shopping-cart" size={16} />Buy now — {product.price}</Button>
+            <Button size="lg" variant="outline"><Icon name="heart" size={16} /></Button>
+          </div>
+          <div style={{ display:"flex", alignItems:"center", gap:8, fontSize:13, color:"var(--muted-foreground)" }}>
+            <Icon name="shield-check" size={15} /><span>Secure checkout via Stripe · protected download</span>
+          </div>
+          <Separator />
+          <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+            <div style={{ fontSize:11, fontWeight:600, textTransform:"uppercase", letterSpacing:"0.06em", color:"var(--muted-foreground)" }}>What's inside</div>
+            <div style={{ display:"flex", alignItems:"center", gap:10, fontSize:14 }}><Icon name="file-check" size={16} />{product.type} asset · instant download</div>
+            <div style={{ display:"flex", alignItems:"center", gap:10, fontSize:14 }}><Icon name="infinity" size={16} />Lifetime access &amp; re-downloads</div>
+            <div style={{ display:"flex", alignItems:"center", gap:10, fontSize:14 }}><Icon name="receipt" size={16} />Receipt emailed to you</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CheckoutSuccess({ product, onDownloads, onBack }) {
+  return (
+    <div style={{ minHeight:"70vh", display:"flex", alignItems:"center", justifyContent:"center", padding:24, fontFamily:"var(--font-sans)" }}>
+      <Card style={{ maxWidth:420, width:"100%", textAlign:"center" }}>
+        <CardContent style={{ padding:"32px 28px", display:"flex", flexDirection:"column", alignItems:"center", gap:14 }}>
+          <span style={{ width:52, height:52, borderRadius:9999, background:"color-mix(in oklch, var(--primary), transparent 88%)", color:"var(--primary)", display:"flex", alignItems:"center", justifyContent:"center" }}><Icon name="check" size={26} /></span>
+          <div>
+            <h2 style={{ fontFamily:"var(--font-heading)", fontWeight:500, fontSize:20, margin:0 }}>Payment confirmed</h2>
+            <p style={{ color:"var(--muted-foreground)", fontSize:14, margin:"6px 0 0" }}>Thanks! <b style={{ color:"var(--foreground)" }}>{product.name}</b> is ready to download.</p>
+          </div>
+          <Button style={{ width:"100%" }} onClick={onDownloads}><Icon name="download" size={16} />Go to downloads</Button>
+          <button onClick={onBack} style={{ border:0, background:"transparent", cursor:"pointer", color:"var(--muted-foreground)", fontSize:13 }}>Back to storefront</button>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+function App() {
+  const [view, setView] = useState({ name:"grid" });
+  return (
+    <div>
+      <Header onHome={() => setView({ name:"grid" })} />
+      {view.name === "grid" && <Grid onOpen={(p, i) => setView({ name:"detail", product:p, index:i })} />}
+      {view.name === "detail" && <Detail product={view.product} index={view.index} onBack={() => setView({ name:"grid" })} onBuy={() => setView({ name:"success", product:view.product })} />}
+      {view.name === "success" && <CheckoutSuccess product={view.product} onDownloads={() => setView({ name:"grid" })} onBack={() => setView({ name:"grid" })} />}
+    </div>
+  );
+}
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>

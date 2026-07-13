@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="design_doc_mode" content="canvas" />
+<title>Creator Commerce — Logo concepts</title>
+<link rel="stylesheet" href="../styles.css" />
+<style>
+  body { margin: 0; font-family: var(--font-sans); color: var(--foreground); }
+  .frame { position: absolute; width: 560px; background: var(--card); border-radius: var(--radius-xl); box-shadow: var(--ring-card); overflow: hidden; }
+  .frame__head { padding: 16px 20px; border-bottom: 1px solid var(--border); display: flex; align-items: baseline; gap: 10px; }
+  .frame__id { font-family: var(--font-mono); font-size: 12px; font-weight: 600; color: var(--primary-foreground); background: var(--primary); border-radius: var(--radius-md); padding: 2px 8px; }
+  .frame__name { font-family: var(--font-heading); font-weight: 500; font-size: 16px; letter-spacing: -0.01em; }
+  .frame__note { font-size: 12px; color: var(--muted-foreground); }
+  .frame__body { padding: 24px 20px; display: flex; flex-direction: column; gap: 20px; }
+  .lockup { display: flex; align-items: center; gap: 14px; }
+  .word { font-family: var(--font-heading); font-weight: 500; font-size: 26px; letter-spacing: -0.02em; }
+  .word b { font-weight: 700; }
+  .row { display: flex; align-items: center; gap: 28px; flex-wrap: wrap; }
+  .swatch-dark { background: var(--foreground); border-radius: var(--radius-lg); padding: 18px 20px; display: flex; align-items: center; gap: 12px; }
+  .swatch-dark .word { color: var(--background); }
+  .sizes { display: flex; align-items: flex-end; gap: 16px; }
+  .cap { font-family: var(--font-mono); font-size: 10px; color: var(--muted-foreground); margin-top: 8px; text-align: center; }
+  .sizeitem { display: flex; flex-direction: column; align-items: center; }
+  h1.title { position: absolute; font-family: var(--font-heading); font-weight: 500; letter-spacing: -0.02em; }
+</style>
+</head>
+<body>
+<h1 class="title" style="left:40px; top:32px; font-size:30px;">Creator Commerce — logo concepts</h1>
+<p class="title" style="left:40px; top:74px; font-size:15px; color:var(--muted-foreground); font-family:var(--font-sans); font-weight:400; max-width:640px;">Four original directions (the source ships no mark). All use the green primary + olive neutrals and pair with the Roboto wordmark. Tell me a letter to refine, mix, or set as the system mark.</p>
+
+<!-- ============ 1A — Storefront tile (recommended) ============ -->
+<div class="frame" style="left:40px; top:150px;">
+  <div class="frame__head">
+    <span class="frame__id">1A</span>
+    <span class="frame__name">Storefront tile</span>
+    <span class="frame__note">C-as-awning · reads as a shop + a “C”</span>
+  </div>
+  <div class="frame__body">
+    <div class="lockup">
+      <svg width="48" height="48" viewBox="0 0 48 48" fill="none" aria-label="mark">
+        <rect width="48" height="48" rx="11" fill="var(--primary)"/>
+        <path d="M14 20 L24 13 L34 20" stroke="var(--primary-foreground)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M32 24 A9 9 0 1 0 32 33" stroke="var(--primary-foreground)" stroke-width="3.4" stroke-linecap="round" fill="none"/>
+      </svg>
+      <span class="word">Creator<b>Commerce</b></span>
+    </div>
+    <div class="row">
+      <div class="swatch-dark">
+        <svg width="40" height="40" viewBox="0 0 48 48" fill="none">
+          <rect width="48" height="48" rx="11" fill="var(--primary)"/>
+          <path d="M14 20 L24 13 L34 20" stroke="var(--primary-foreground)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M32 24 A9 9 0 1 0 32 33" stroke="var(--primary-foreground)" stroke-width="3.4" stroke-linecap="round" fill="none"/>
+        </svg>
+        <span class="word">Creator<b>Commerce</b></span>
+      </div>
+    </div>
+    <div class="sizes">
+      <div class="sizeitem">
+        <svg width="32" height="32" viewBox="0 0 48 48"><rect width="48" height="48" rx="11" fill="var(--primary)"/><path d="M14 20 L24 13 L34 20" stroke="var(--primary-foreground)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><path d="M32 24 A9 9 0 1 0 32 33" stroke="var(--primary-foreground)" stroke-width="3.4" stroke-linecap="round" fill="none"/></svg>
+        <span class="cap">32px</span>
+      </div>
+      <div class="sizeitem">
+        <svg width="20" height="20" viewBox="0 0 48 48"><rect width="48" height="48" rx="11" fill="var(--primary)"/><path d="M14 20 L24 13 L34 20" stroke="var(--primary-foreground)" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M32 24 A9 9 0 1 0 32 33" stroke="var(--primary-foreground)" stroke-width="4" stroke-linecap="round" fill="none"/></svg>
+        <span class="cap">favicon 20px</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 1B — Download C ============ -->
+<div class="frame" style="left:640px; top:150px;">
+  <div class="frame__head">
+    <span class="frame__id">1B</span>
+    <span class="frame__name">Download C</span>
+    <span class="frame__note">C wrapping a down-arrow · “instant digital delivery”</span>
+  </div>
+  <div class="frame__body">
+    <div class="lockup">
+      <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
+        <path d="M35 15 A15 15 0 1 0 35 33" stroke="var(--primary)" stroke-width="5" stroke-linecap="round" fill="none"/>
+        <path d="M24 15 L24 30 M18 24 L24 30 L30 24" stroke="var(--primary)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <span class="word">Creator<b>Commerce</b></span>
+    </div>
+    <div class="row">
+      <div class="swatch-dark">
+        <svg width="40" height="40" viewBox="0 0 48 48" fill="none">
+          <path d="M35 15 A15 15 0 1 0 35 33" stroke="var(--sidebar-primary)" stroke-width="5" stroke-linecap="round" fill="none"/>
+          <path d="M24 15 L24 30 M18 24 L24 30 L30 24" stroke="var(--sidebar-primary)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <span class="word">Creator<b>Commerce</b></span>
+      </div>
+    </div>
+    <div class="sizes">
+      <div class="sizeitem">
+        <svg width="32" height="32" viewBox="0 0 48 48" fill="none"><path d="M35 15 A15 15 0 1 0 35 33" stroke="var(--primary)" stroke-width="5" stroke-linecap="round" fill="none"/><path d="M24 15 L24 30 M18 24 L24 30 L30 24" stroke="var(--primary)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span class="cap">32px</span>
+      </div>
+      <div class="sizeitem">
+        <svg width="20" height="20" viewBox="0 0 48 48" fill="none"><path d="M35 15 A15 15 0 1 0 35 33" stroke="var(--primary)" stroke-width="6" stroke-linecap="round" fill="none"/><path d="M24 15 L24 30 M18 24 L24 30 L30 24" stroke="var(--primary)" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span class="cap">favicon 20px</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 1C — Interlocking CC ============ -->
+<div class="frame" style="left:40px; top:520px;">
+  <div class="frame__head">
+    <span class="frame__id">1C</span>
+    <span class="frame__name">Interlocking CC</span>
+    <span class="frame__note">Two C’s = Creator + Commerce · monogram</span>
+  </div>
+  <div class="frame__body">
+    <div class="lockup">
+      <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
+        <path d="M28 12 A12 12 0 1 0 28 36" stroke="var(--foreground)" stroke-width="4.5" stroke-linecap="round" fill="none"/>
+        <path d="M32 16 A12 12 0 1 1 32 32" stroke="var(--primary)" stroke-width="4.5" stroke-linecap="round" fill="none"/>
+      </svg>
+      <span class="word">Creator<b>Commerce</b></span>
+    </div>
+    <div class="row">
+      <div class="swatch-dark">
+        <svg width="40" height="40" viewBox="0 0 48 48" fill="none">
+          <path d="M28 12 A12 12 0 1 0 28 36" stroke="var(--background)" stroke-width="4.5" stroke-linecap="round" fill="none"/>
+          <path d="M32 16 A12 12 0 1 1 32 32" stroke="var(--sidebar-primary)" stroke-width="4.5" stroke-linecap="round" fill="none"/>
+        </svg>
+        <span class="word">Creator<b>Commerce</b></span>
+      </div>
+    </div>
+    <div class="sizes">
+      <div class="sizeitem">
+        <svg width="32" height="32" viewBox="0 0 48 48" fill="none"><path d="M28 12 A12 12 0 1 0 28 36" stroke="var(--foreground)" stroke-width="4.5" stroke-linecap="round" fill="none"/><path d="M32 16 A12 12 0 1 1 32 32" stroke="var(--primary)" stroke-width="4.5" stroke-linecap="round" fill="none"/></svg>
+        <span class="cap">32px</span>
+      </div>
+      <div class="sizeitem">
+        <svg width="20" height="20" viewBox="0 0 48 48" fill="none"><path d="M28 12 A12 12 0 1 0 28 36" stroke="var(--foreground)" stroke-width="5.5" stroke-linecap="round" fill="none"/><path d="M32 16 A12 12 0 1 1 32 32" stroke="var(--primary)" stroke-width="5.5" stroke-linecap="round" fill="none"/></svg>
+        <span class="cap">favicon 20px</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 1D — Tag mark ============ -->
+<div class="frame" style="left:640px; top:520px;">
+  <div class="frame__head">
+    <span class="frame__id">1D</span>
+    <span class="frame__name">Price tag</span>
+    <span class="frame__note">Rounded tag + dot · commerce-forward, filled</span>
+  </div>
+  <div class="frame__body">
+    <div class="lockup">
+      <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
+        <rect width="48" height="48" rx="11" fill="var(--primary)"/>
+        <path d="M23 13 H30 A5 5 0 0 1 35 18 V25 L24 36 A3 3 0 0 1 20 36 L12 28 A3 3 0 0 1 12 24 Z" fill="none" stroke="var(--primary-foreground)" stroke-width="3" stroke-linejoin="round"/>
+        <circle cx="28.5" cy="19.5" r="2.4" fill="var(--primary-foreground)"/>
+      </svg>
+      <span class="word">Creator<b>Commerce</b></span>
+    </div>
+    <div class="row">
+      <div class="swatch-dark">
+        <svg width="40" height="40" viewBox="0 0 48 48" fill="none">
+          <rect width="48" height="48" rx="11" fill="var(--sidebar-primary)"/>
+          <path d="M23 13 H30 A5 5 0 0 1 35 18 V25 L24 36 A3 3 0 0 1 20 36 L12 28 A3 3 0 0 1 12 24 Z" fill="none" stroke="var(--primary-foreground)" stroke-width="3" stroke-linejoin="round"/>
+          <circle cx="28.5" cy="19.5" r="2.4" fill="var(--primary-foreground)"/>
+        </svg>
+        <span class="word">Creator<b>Commerce</b></span>
+      </div>
+    </div>
+    <div class="sizes">
+      <div class="sizeitem">
+        <svg width="32" height="32" viewBox="0 0 48 48" fill="none"><rect width="48" height="48" rx="11" fill="var(--primary)"/><path d="M23 13 H30 A5 5 0 0 1 35 18 V25 L24 36 A3 3 0 0 1 20 36 L12 28 A3 3 0 0 1 12 24 Z" fill="none" stroke="var(--primary-foreground)" stroke-width="3" stroke-linejoin="round"/><circle cx="28.5" cy="19.5" r="2.4" fill="var(--primary-foreground)"/></svg>
+        <span class="cap">32px</span>
+      </div>
+      <div class="sizeitem">
+        <svg width="20" height="20" viewBox="0 0 48 48" fill="none"><rect width="48" height="48" rx="11" fill="var(--primary)"/><path d="M23 13 H30 A5 5 0 0 1 35 18 V25 L24 36 A3 3 0 0 1 20 36 L12 28 A3 3 0 0 1 12 24 Z" fill="none" stroke="var(--primary-foreground)" stroke-width="3.6" stroke-linejoin="round"/><circle cx="28.5" cy="19.5" r="2.8" fill="var(--primary-foreground)"/></svg>
+        <span class="cap">favicon 20px</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

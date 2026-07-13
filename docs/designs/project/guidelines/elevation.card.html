@@ -1,0 +1,18 @@
+<!-- @dsCard group="Brand" viewport="700x160" name="Elevation — rings & shadows" subtitle="Hairline rings carry elevation; shadows are soft & rare" -->
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8" /><link rel="stylesheet" href="../styles.css" />
+<style>
+  body{margin:0;padding:24px 20px;background:var(--background);color:var(--foreground);font-family:var(--font-sans);}
+  .row{display:flex;gap:20px;}
+  .item{display:flex;flex-direction:column;align-items:center;gap:10px;}
+  .box{width:110px;height:64px;background:var(--card);border-radius:var(--radius-xl);}
+  .tok{font-family:var(--font-mono);font-size:10px;color:var(--muted-foreground);}
+</style></head>
+<body>
+  <div class="row">
+    <div class="item"><div class="box" style="box-shadow:var(--ring-card)"></div><span class="tok">--ring-card (cards)</span></div>
+    <div class="item"><div class="box" style="box-shadow:var(--shadow-sm)"></div><span class="tok">--shadow-sm</span></div>
+    <div class="item"><div class="box" style="box-shadow:var(--shadow)"></div><span class="tok">--shadow (tooltip)</span></div>
+    <div class="item"><div class="box" style="box-shadow:var(--shadow-lg)"></div><span class="tok">--shadow-lg (sheet)</span></div>
+  </div>
+</body></html>

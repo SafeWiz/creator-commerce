@@ -1,0 +1,8 @@
+/* Webfonts — all three families are on Google Fonts.
+   Nunito Sans → body / UI (--font-sans)
+   Roboto      → headings, card titles (--font-heading)
+   Geist Mono  → prices, code, tabular data (--font-mono)
+   NOTE: substituted via Google Fonts CDN — the source app loads the same
+   families through next/font. Swap these @import URLs for self-hosted
+   woff2 files if you need offline / pinned versions. */
+@import url('https://fonts.googleapis.com/css2?family=Nunito+Sans:opsz,wght@6..12,400;6..12,500;6..12,600;6..12,700;6..12,800&family=Roboto:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap');

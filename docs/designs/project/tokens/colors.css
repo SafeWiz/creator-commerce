@@ -1,0 +1,82 @@
+/* ============================================================
+   COLORS — Creator Commerce
+   Olive-tinted neutral scale + green primary, expressed in OKLCH
+   (copied verbatim from the source app's globals.css, base-nova
+   style, "olive" base color). Base ramps first, semantic aliases
+   below. Consumers should prefer the semantic aliases.
+   ============================================================ */
+:root {
+  /* ---- Brand green (primary) ramp ---- */
+  --green-50:  oklch(0.982 0.018 155.826);
+  --green-100: oklch(0.95 0.045 152);
+  --green-300: oklch(0.79 0.11 150);
+  --green-500: oklch(0.627 0.194 149.214); /* sidebar-primary / vivid */
+  --green-600: oklch(0.527 0.154 150.069); /* PRIMARY */
+  --green-700: oklch(0.448 0.119 151.328);
+  --green-900: oklch(0.30 0.08 152);
+
+  /* ---- Olive neutral ramp (warm gray) ---- */
+  --olive-0:   oklch(1 0 0);              /* pure white / surface */
+  --olive-25:  oklch(0.988 0.003 106.5);  /* sidebar bg */
+  --olive-50:  oklch(0.966 0.005 106.5);  /* muted / accent */
+  --olive-100: oklch(0.93 0.007 106.5);   /* border / input */
+  --olive-200: oklch(0.88 0.011 106.6);
+  --olive-300: oklch(0.737 0.021 106.9);  /* ring */
+  --olive-400: oklch(0.58 0.031 107.3);   /* muted-foreground */
+  --olive-500: oklch(0.466 0.025 107.3);
+  --olive-600: oklch(0.394 0.023 107.4);
+  --olive-700: oklch(0.286 0.016 107.4);
+  --olive-800: oklch(0.228 0.013 107.4);
+  --olive-900: oklch(0.153 0.006 107.1);  /* foreground / near-black */
+
+  /* ---- Feedback ---- */
+  --red-500:   oklch(0.577 0.245 27.325); /* destructive */
+
+  /* ============================================================
+     SEMANTIC ALIASES  (use these in components)
+     ============================================================ */
+  --background: var(--olive-0);
+  --foreground: var(--olive-900);
+
+  --card: var(--olive-0);
+  --card-foreground: var(--olive-900);
+
+  --popover: var(--olive-0);
+  --popover-foreground: var(--olive-900);
+
+  --primary: var(--green-600);
+  --primary-foreground: var(--green-50);
+
+  --secondary: oklch(0.967 0.001 286.375);
+  --secondary-foreground: oklch(0.21 0.006 285.885);
+
+  --muted: var(--olive-50);
+  --muted-foreground: var(--olive-400);
+
+  --accent: var(--olive-50);
+  --accent-foreground: oklch(0.228 0.013 107.4);
+
+  --destructive: var(--red-500);
+  --destructive-foreground: var(--olive-0);
+
+  --border: var(--olive-100);
+  --input: var(--olive-100);
+  --ring: var(--olive-300);
+
+  /* Charts / data-viz (olive monochrome ladder) */
+  --chart-1: var(--olive-200);
+  --chart-2: var(--olive-400);
+  --chart-3: var(--olive-500);
+  --chart-4: var(--olive-600);
+  --chart-5: var(--olive-700);
+
+  /* Sidebar surface */
+  --sidebar: var(--olive-25);
+  --sidebar-foreground: var(--olive-900);
+  --sidebar-primary: var(--green-500);
+  --sidebar-primary-foreground: var(--green-50);
+  --sidebar-accent: var(--olive-50);
+  --sidebar-accent-foreground: oklch(0.228 0.013 107.4);
+  --sidebar-border: var(--olive-100);
+  --sidebar-ring: var(--olive-300);
+}

@@ -1,0 +1,184 @@
+<!-- @dsCard group="Marketing" viewport="1280x900" name="Landing page" subtitle="Public marketing home — header, hero, features, footer" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Creator Commerce — Sell your digital products</title>
+<link rel="stylesheet" href="../../styles.css" />
+<style>
+  html, body { margin: 0; }
+  body { background: var(--background); color: var(--foreground); font-family: var(--font-sans); }
+  #root { min-height: 100vh; }
+  a { color: var(--primary); text-decoration: none; }
+  a:hover { color: color-mix(in oklch, var(--primary), var(--foreground) 15%); }
+  .mk-logo { display:flex; align-items:center; gap:10px; }
+  .mk-word { font-family: var(--font-heading); font-weight: 500; font-size: 17px; letter-spacing: -0.02em; }
+  .mk-word b { font-weight: 700; }
+  .eyebrow { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted-foreground); }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+<script src="../../_ds_bundle.js"></script>
+<script type="text/babel">
+const NS = window.CreatorCommerceDesignSystem_0c16ec;
+const { Button, Badge, Card, CardContent } = NS;
+const { useEffect, useRef } = React;
+
+function toPascal(s){return s.split("-").map(w=>w[0].toUpperCase()+w.slice(1)).join("");}
+function Icon({ name, size = 16, style }) {
+  const ref = useRef(null);
+  useEffect(() => {
+    const h = ref.current; if (!h || !window.lucide) return;
+    const node = (window.lucide.icons||{})[toPascal(name)]; h.innerHTML = "";
+    if (node && window.lucide.createElement) { const s=window.lucide.createElement(node); s.setAttribute("width",size); s.setAttribute("height",size); s.style.display="block"; h.appendChild(s);}
+  }, [name, size]);
+  return <span ref={ref} style={{ display:"inline-flex", alignItems:"center", ...style }} />;
+}
+function Logo({ size=28 }) {
+  return <svg width={size} height={size} viewBox="0 0 48 48" fill="none" style={{flexShrink:0}}><path d="M28 12 A12 12 0 1 0 28 36" stroke="var(--foreground)" strokeWidth="4.5" strokeLinecap="round" fill="none"/><path d="M32 16 A12 12 0 1 1 32 32" stroke="var(--primary)" strokeWidth="4.5" strokeLinecap="round" fill="none"/></svg>;
+}
+
+const FEATURES = [
+  { icon: "store", title: "Your own storefront", body: "A public page at creatorcommerce.com/@you. Share one link; sell everywhere." },
+  { icon: "credit-card", title: "Stripe checkout", body: "Take card payments in minutes. Money lands straight in your Stripe account." },
+  { icon: "shield-check", title: "Protected downloads", body: "Files are locked to the buyer. No leaked links, no manual delivery." },
+  { icon: "sparkles", title: "AI product pages", body: "Upload a file and we draft the description and a teaser for you." },
+  { icon: "bar-chart-3", title: "Sales analytics", body: "Revenue, units, and your top products — updated in real time." },
+  { icon: "download", title: "Instant delivery", body: "Buyers download the moment payment clears. Zero fulfillment work." },
+];
+const STEPS = [
+  { n: "1", t: "Upload your file", d: "ZIP, PDF, audio — up to 2 GB." },
+  { n: "2", t: "Set a price", d: "Publish to your storefront in one click." },
+  { n: "3", t: "Get paid", d: "Share your link and start selling." },
+];
+
+function App() {
+  return (
+    <div>
+      {/* Header */}
+      <header style={{ position:"sticky", top:0, zIndex:10, background:"color-mix(in oklch, var(--background), transparent 15%)", backdropFilter:"blur(8px)", borderBottom:"1px solid var(--border)" }}>
+        <div style={{ maxWidth:1080, margin:"0 auto", padding:"14px 24px", display:"flex", alignItems:"center", gap:16 }}>
+          <div className="mk-logo"><Logo /><span className="mk-word">Creator<b>Commerce</b></span></div>
+          <nav style={{ display:"flex", gap:22, marginLeft:24, fontSize:14 }}>
+            <a href="#features" style={{ color:"var(--muted-foreground)" }}>Features</a>
+            <a href="#how" style={{ color:"var(--muted-foreground)" }}>How it works</a>
+            <a href="#pricing" style={{ color:"var(--muted-foreground)" }}>Pricing</a>
+          </nav>
+          <div style={{ flex:1 }} />
+          <Button variant="ghost" size="sm">Sign in</Button>
+          <Button size="sm">Start selling</Button>
+        </div>
+      </header>
+
+      {/* Hero */}
+      <section style={{ maxWidth:1080, margin:"0 auto", padding:"80px 24px 56px", textAlign:"center", display:"flex", flexDirection:"column", alignItems:"center", gap:22 }}>
+        <Badge variant="secondary" dot>Now with AI product pages</Badge>
+        <h1 style={{ fontFamily:"var(--font-heading)", fontWeight:500, fontSize:52, lineHeight:1.08, letterSpacing:"-0.03em", margin:0, maxWidth:"16ch" }}>
+          Sell your digital products in minutes
+        </h1>
+        <p style={{ fontSize:18, lineHeight:1.6, color:"var(--muted-foreground)", margin:0, maxWidth:"52ch" }}>
+          Creator Commerce gives every creator a storefront, Stripe checkout, and protected downloads — so you can focus on making, not fulfilling.
+        </p>
+        <div style={{ display:"flex", gap:12, marginTop:4 }}>
+          <Button size="lg">Start selling free<Icon name="arrow-right" size={16} /></Button>
+          <Button size="lg" variant="outline">See a storefront</Button>
+        </div>
+        <div style={{ fontSize:13, color:"var(--muted-foreground)", display:"flex", alignItems:"center", gap:8 }}>
+          <Icon name="check" size={14} />No monthly fee to start · you keep what you earn
+        </div>
+
+        {/* Product preview strip */}
+        <div style={{ marginTop:32, width:"100%", borderRadius:"var(--radius-3xl)", boxShadow:"var(--ring-card)", overflow:"hidden", background:"var(--card)" }}>
+          <div style={{ height:38, borderBottom:"1px solid var(--border)", display:"flex", alignItems:"center", gap:6, padding:"0 14px" }}>
+            <span style={{ width:10, height:10, borderRadius:9999, background:"var(--olive-200)" }} />
+            <span style={{ width:10, height:10, borderRadius:9999, background:"var(--olive-200)" }} />
+            <span style={{ width:10, height:10, borderRadius:9999, background:"var(--olive-200)" }} />
+            <span style={{ marginLeft:12, fontFamily:"var(--font-mono)", fontSize:12, color:"var(--muted-foreground)" }}>creatorcommerce.com/@gabi</span>
+          </div>
+          <div style={{ padding:24, display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:16 }}>
+            {["#e7e6df","#dfe4dc","#e5e2da"].map((c,i)=>(
+              <div key={i} style={{ borderRadius:"var(--radius-xl)", boxShadow:"var(--ring-card)", overflow:"hidden", background:"var(--card)" }}>
+                <div style={{ aspectRatio:"3/2", background:`linear-gradient(135deg, ${c}, color-mix(in oklch, ${c}, black 8%))`, display:"flex", alignItems:"center", justifyContent:"center", color:"var(--olive-400)" }}>
+                  <Icon name={["package","file-text","audio-lines"][i]} size={24} />
+                </div>
+                <div style={{ padding:14, textAlign:"left", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                  <span style={{ fontSize:13, fontWeight:500 }}>{["Presets","Notion OS","Loops"][i]}</span>
+                  <span style={{ fontFamily:"var(--font-mono)", fontSize:14, fontWeight:500 }}>{["$29","$19","$12"][i]}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Features */}
+      <section id="features" style={{ background:"var(--muted)", borderTop:"1px solid var(--border)", borderBottom:"1px solid var(--border)" }}>
+        <div style={{ maxWidth:1080, margin:"0 auto", padding:"64px 24px" }}>
+          <p className="eyebrow" style={{ textAlign:"center" }}>Everything you need</p>
+          <h2 style={{ fontFamily:"var(--font-heading)", fontWeight:500, fontSize:32, letterSpacing:"-0.02em", textAlign:"center", margin:"8px 0 40px" }}>One tool from upload to payout</h2>
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:16 }}>
+            {FEATURES.map((f) => (
+              <Card key={f.title}>
+                <CardContent style={{ padding:20, display:"flex", flexDirection:"column", gap:10 }}>
+                  <span style={{ width:38, height:38, borderRadius:"var(--radius-lg)", background:"color-mix(in oklch, var(--primary), transparent 90%)", color:"var(--primary)", display:"flex", alignItems:"center", justifyContent:"center" }}><Icon name={f.icon} size={19} /></span>
+                  <span style={{ fontFamily:"var(--font-heading)", fontWeight:500, fontSize:16 }}>{f.title}</span>
+                  <span style={{ fontSize:14, lineHeight:1.55, color:"var(--muted-foreground)" }}>{f.body}</span>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* How it works */}
+      <section id="how" style={{ maxWidth:1080, margin:"0 auto", padding:"64px 24px" }}>
+        <p className="eyebrow" style={{ textAlign:"center" }}>How it works</p>
+        <h2 style={{ fontFamily:"var(--font-heading)", fontWeight:500, fontSize:32, letterSpacing:"-0.02em", textAlign:"center", margin:"8px 0 40px" }}>Live in three steps</h2>
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:24 }}>
+          {STEPS.map((s) => (
+            <div key={s.n} style={{ display:"flex", flexDirection:"column", gap:8 }}>
+              <span style={{ width:36, height:36, borderRadius:9999, background:"var(--primary)", color:"var(--primary-foreground)", display:"flex", alignItems:"center", justifyContent:"center", fontFamily:"var(--font-mono)", fontWeight:600 }}>{s.n}</span>
+              <span style={{ fontFamily:"var(--font-heading)", fontWeight:500, fontSize:18 }}>{s.t}</span>
+              <span style={{ fontSize:14, color:"var(--muted-foreground)", lineHeight:1.55 }}>{s.d}</span>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* CTA */}
+      <section style={{ maxWidth:1080, margin:"0 auto 64px", padding:"0 24px" }}>
+        <div style={{ borderRadius:"var(--radius-3xl)", background:"var(--foreground)", color:"var(--background)", padding:"52px 32px", textAlign:"center", display:"flex", flexDirection:"column", alignItems:"center", gap:18 }}>
+          <h2 style={{ fontFamily:"var(--font-heading)", fontWeight:500, fontSize:34, letterSpacing:"-0.02em", margin:0 }}>Start selling today</h2>
+          <p style={{ fontSize:16, color:"color-mix(in oklch, var(--background), transparent 30%)", margin:0, maxWidth:"46ch" }}>Create your storefront in minutes. No monthly fee — you only pay when you get paid.</p>
+          <Button size="lg" style={{ background:"var(--sidebar-primary)", color:"var(--primary-foreground)" }}>Create your storefront<Icon name="arrow-right" size={16} /></Button>
+        </div>
+      </section>
+
+      {/* Footer */}
+      <footer style={{ borderTop:"1px solid var(--border)" }}>
+        <div style={{ maxWidth:1080, margin:"0 auto", padding:"32px 24px", display:"flex", alignItems:"center", gap:16, flexWrap:"wrap" }}>
+          <div className="mk-logo"><Logo size={22} /><span className="mk-word" style={{ fontSize:15 }}>Creator<b>Commerce</b></span></div>
+          <div style={{ flex:1 }} />
+          <nav style={{ display:"flex", gap:20, fontSize:13, color:"var(--muted-foreground)", flexWrap:"wrap" }}>
+            <a href="#" style={{ color:"var(--muted-foreground)" }}>Features</a>
+            <a href="#" style={{ color:"var(--muted-foreground)" }}>Pricing</a>
+            <a href="#" style={{ color:"var(--muted-foreground)" }}>Docs</a>
+            <a href="#" style={{ color:"var(--muted-foreground)" }}>Terms</a>
+            <a href="#" style={{ color:"var(--muted-foreground)" }}>Privacy</a>
+          </nav>
+          <span style={{ fontSize:12, color:"var(--muted-foreground)", fontFamily:"var(--font-mono)", width:"100%", textAlign:"right" }}>© 2026 Creator Commerce</span>
+        </div>
+      </footer>
+    </div>
+  );
+}
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>

@@ -1,0 +1,65 @@
+<!-- @dsCard group="Components" viewport="700x340" name="Display — Card, Badge, Separator, Skeleton" subtitle="Surfaces, status pills, dividers, loading placeholders" -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<link rel="stylesheet" href="../../styles.css" />
+<style>
+  body{margin:0;padding:20px;background:var(--background);color:var(--foreground);font-family:var(--font-sans);}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start;}
+  .lbl{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted-foreground);font-weight:600;margin:0 0 8px;}
+  .row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;}
+  .kpi{font-family:var(--font-mono);font-size:30px;font-weight:500;letter-spacing:-.02em;}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="../../_ds_bundle.js"></script>
+<script type="text/babel">
+  const NS = window.CreatorCommerceDesignSystem_0c16ec;
+  const { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter, CardAction, Badge, Button, Separator, Skeleton } = NS;
+  function Demo() {
+    return (
+      <div className="grid">
+        <Card size="sm">
+          <CardHeader>
+            <CardTitle>Revenue</CardTitle>
+            <CardDescription>Last 30 days</CardDescription>
+            <CardAction><Badge variant="secondary">+12%</Badge></CardAction>
+          </CardHeader>
+          <CardContent><span className="kpi">$4,280</span></CardContent>
+          <CardFooter><Button variant="outline" size="sm">View sales</Button></CardFooter>
+        </Card>
+
+        <div>
+          <p className="lbl">Badges</p>
+          <div className="row" style={{marginBottom:16}}>
+            <Badge>Published</Badge>
+            <Badge variant="secondary" dot>Draft</Badge>
+            <Badge variant="outline">PDF</Badge>
+            <Badge variant="destructive">Refunded</Badge>
+          </div>
+          <p className="lbl">Separator</p>
+          <div className="row" style={{marginBottom:16}}>
+            <span>Sales</span><Separator orientation="vertical" style={{height:16}} /><span>Analytics</span>
+          </div>
+          <Separator style={{margin:"0 0 16px"}} />
+          <p className="lbl">Skeleton</p>
+          <div style={{display:"flex",gap:10,alignItems:"center"}}>
+            <Skeleton style={{height:40,width:40,borderRadius:8}} />
+            <div style={{flex:1,display:"flex",flexDirection:"column",gap:6}}>
+              <Skeleton style={{height:12,width:"70%"}} />
+              <Skeleton style={{height:12,width:"40%"}} />
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+  ReactDOM.createRoot(document.getElementById("root")).render(<Demo />);
+</script>
+</body>
+</html>

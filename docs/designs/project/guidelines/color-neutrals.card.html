@@ -1,0 +1,26 @@
+<!-- @dsCard group="Colors" viewport="700x160" name="Olive neutrals" subtitle="Warm-gray ramp — text, surfaces, borders, sidebar" -->
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8" /><link rel="stylesheet" href="../styles.css" />
+<style>
+  body{margin:0;padding:16px;background:var(--background);font-family:var(--font-sans);}
+  .ramp{display:flex;gap:6px;}
+  .sw{flex:1;display:flex;flex-direction:column;gap:6px;}
+  .chip{height:56px;border-radius:var(--radius-md);box-shadow:var(--ring-card);}
+  .name{font-size:10px;font-weight:600;color:var(--foreground);}
+  .tok{font-size:9px;color:var(--muted-foreground);font-family:var(--font-mono);}
+</style></head>
+<body>
+<div class="ramp">
+  <div class="sw"><div class="chip" style="background:var(--olive-0)"></div><span class="name">0</span></div>
+  <div class="sw"><div class="chip" style="background:var(--olive-25)"></div><span class="name">25</span></div>
+  <div class="sw"><div class="chip" style="background:var(--olive-50)"></div><span class="name">50</span></div>
+  <div class="sw"><div class="chip" style="background:var(--olive-100)"></div><span class="name">100</span></div>
+  <div class="sw"><div class="chip" style="background:var(--olive-200)"></div><span class="name">200</span></div>
+  <div class="sw"><div class="chip" style="background:var(--olive-300)"></div><span class="name">300</span></div>
+  <div class="sw"><div class="chip" style="background:var(--olive-400)"></div><span class="name">400</span></div>
+  <div class="sw"><div class="chip" style="background:var(--olive-500)"></div><span class="name">500</span></div>
+  <div class="sw"><div class="chip" style="background:var(--olive-700)"></div><span class="name">700</span></div>
+  <div class="sw"><div class="chip" style="background:var(--olive-900)"></div><span class="name">900</span></div>
+</div>
+<p style="font-size:11px;color:var(--muted-foreground);margin:10px 0 0;font-family:var(--font-mono)">0=surface · 50=muted · 100=border · 400=muted-fg · 900=foreground</p>
+</body></html>

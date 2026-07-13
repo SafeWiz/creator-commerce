@@ -1,0 +1,24 @@
+<!-- @dsCard group="Colors" viewport="700x150" name="Semantic roles" subtitle="Background, foreground, primary, muted, destructive, border" -->
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8" /><link rel="stylesheet" href="../styles.css" />
+<style>
+  body{margin:0;padding:16px;background:var(--background);font-family:var(--font-sans);}
+  .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;}
+  .row{display:flex;align-items:center;gap:10px;}
+  .chip{width:40px;height:40px;border-radius:var(--radius-md);box-shadow:var(--ring-card);flex-shrink:0;}
+  .name{font-size:12px;font-weight:600;color:var(--foreground);}
+  .tok{font-size:10px;color:var(--muted-foreground);font-family:var(--font-mono);}
+</style></head>
+<body>
+<div class="grid">
+  <div class="row"><div class="chip" style="background:var(--background)"></div><div><div class="name">Background</div><div class="tok">--background</div></div></div>
+  <div class="row"><div class="chip" style="background:var(--foreground)"></div><div><div class="name">Foreground</div><div class="tok">--foreground</div></div></div>
+  <div class="row"><div class="chip" style="background:var(--primary)"></div><div><div class="name">Primary</div><div class="tok">--primary</div></div></div>
+  <div class="row"><div class="chip" style="background:var(--muted)"></div><div><div class="name">Muted</div><div class="tok">--muted</div></div></div>
+  <div class="row"><div class="chip" style="background:var(--secondary)"></div><div><div class="name">Secondary</div><div class="tok">--secondary</div></div></div>
+  <div class="row"><div class="chip" style="background:var(--destructive)"></div><div><div class="name">Destructive</div><div class="tok">--destructive</div></div></div>
+  <div class="row"><div class="chip" style="background:var(--accent)"></div><div><div class="name">Accent</div><div class="tok">--accent</div></div></div>
+  <div class="row"><div class="chip" style="background:var(--border)"></div><div><div class="name">Border</div><div class="tok">--border</div></div></div>
+  <div class="row"><div class="chip" style="background:var(--sidebar)"></div><div><div class="name">Sidebar</div><div class="tok">--sidebar</div></div></div>
+</div>
+</body></html>

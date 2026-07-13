@@ -1,0 +1,18 @@
+<!-- @dsCard group="Spacing" viewport="700x150" name="Control heights" subtitle="Compact controls — 32px default button/input" -->
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8" /><link rel="stylesheet" href="../styles.css" />
+<style>
+  body{margin:0;padding:20px;background:var(--background);color:var(--foreground);font-family:var(--font-sans);}
+  .row{display:flex;align-items:flex-end;gap:16px;}
+  .item{display:flex;flex-direction:column;align-items:center;gap:8px;}
+  .box{background:var(--muted);border:1px solid var(--border);border-radius:var(--radius-lg);width:72px;display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--muted-foreground);font-family:var(--font-mono);}
+  .tok{font-family:var(--font-mono);font-size:10px;color:var(--muted-foreground);}
+</style></head>
+<body>
+  <div class="row">
+    <div class="item"><div class="box" style="height:24px">24</div><span class="tok">xs</span></div>
+    <div class="item"><div class="box" style="height:28px">28</div><span class="tok">sm</span></div>
+    <div class="item"><div class="box" style="height:32px">32</div><span class="tok">default</span></div>
+    <div class="item"><div class="box" style="height:36px">36</div><span class="tok">lg</span></div>
+  </div>
+</body></html>
