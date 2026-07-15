@@ -2,6 +2,7 @@ import type { Metadata } from "next"
 import Link from "next/link"
 import { Check } from "lucide-react"
 
+import { checklist, kpis, topProducts } from "@/lib/mock-data"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -18,27 +19,6 @@ export const metadata: Metadata = {
   title: "Dashboard",
 }
 
-const KPIS = [
-  { label: "Revenue", value: "$4,280", sub: "last 30 days", delta: "+12%", up: true },
-  { label: "Units sold", value: "142", sub: "last 30 days", delta: "+8%", up: true },
-  { label: "Products", value: "14", sub: "3 drafts", delta: null, up: true },
-  { label: "Conversion", value: "3.1%", sub: "storefront", delta: "-0.4%", up: false },
-]
-
-const TOP_PRODUCTS = [
-  { name: "Golden Hour Presets", rev: "$2,436", pct: 57 },
-  { name: "Notion Freelance OS", rev: "$779", pct: 18 },
-  { name: "Ambient Loops Vol. 2", rev: "$204", pct: 5 },
-]
-
-const CHECKLIST = [
-  { done: true, label: "Create your account" },
-  { done: true, label: "Claim your handle", sub: "creatorcommerce.com/@gabi" },
-  { done: true, label: "Publish your first product" },
-  { done: false, label: "Connect Stripe to get paid" },
-  { done: false, label: "Share your storefront link" },
-]
-
 export default function DashboardPage() {
   return (
     <div className="mx-auto flex max-w-[1120px] flex-col gap-5 p-6">
@@ -53,7 +33,7 @@ export default function DashboardPage() {
 
       {/* KPIs */}
       <div className="grid grid-cols-4 gap-4">
-        {KPIS.map((kpi) => (
+        {kpis.map((kpi) => (
           <Card key={kpi.label} size="sm">
             <CardHeader>
               <CardDescription>{kpi.label}</CardDescription>
@@ -81,7 +61,7 @@ export default function DashboardPage() {
             <CardDescription>By revenue, last 30 days</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-3.5">
-            {TOP_PRODUCTS.map((product) => (
+            {topProducts.map((product) => (
               <div key={product.name} className="flex flex-col gap-1.5">
                 <div className="flex justify-between text-[13px]">
                   <span className="font-medium">{product.name}</span>
@@ -110,7 +90,7 @@ export default function DashboardPage() {
             <CardDescription>3 of 5 complete</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col">
-            {CHECKLIST.map((item) => (
+            {checklist.map((item) => (
               <div
                 key={item.label}
                 className="flex items-start gap-2.5 border-b py-2 last:border-b-0"
