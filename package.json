@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "schema:better-auth": "npx @better-auth/cli generate --output lib/server/db/schemas/auth.ts",
+    "schema:migrations:generate": "npx drizzle-kit generate",
+    "schema:migrations:run": "npx drizzle-kit migrate",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
