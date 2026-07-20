@@ -15,6 +15,11 @@ export const auth = betterAuth({
   emailAndPassword: {
     enabled: true,
   },
+  user: {
+    additionalFields: {
+      handle: { type: 'string', required: true, unique: true, input: true },
+    },
+  },
   // nextCookies must be the last plugin: it lets server actions set
   // auth cookies via next/headers.
   plugins: [nextCookies()],
