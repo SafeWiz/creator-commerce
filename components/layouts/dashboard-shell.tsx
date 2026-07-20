@@ -1,12 +1,14 @@
 import Link from "next/link"
 import { ExternalLink } from "lucide-react"
 
-import { users } from "@/lib/mock-data"
+import { requireUser } from "@/lib/server/dal/user"
+import { getInitials } from "@/lib/utils"
 import { Logo, Wordmark } from "@/components/logo"
 import {
   DashboardFooterNav,
   DashboardNavGroups,
 } from "@/components/layouts/dashboard-nav"
+import { SignOutButton } from "@/components/layouts/sign-out-button"
 import { DashboardTopbarTitle } from "@/components/layouts/dashboard-topbar-title"
 import { Button } from "@/components/ui/button"
 import {
@@ -19,12 +21,12 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar"
 
-export function DashboardShell({
+export async function DashboardShell({
   children,
 }: Readonly<{
   children: React.ReactNode
 }>) {
-  const user = users[0]
+  const user = await requireUser()
   return (
     <SidebarProvider>
       <Sidebar collapsible="icon">
@@ -39,14 +41,15 @@ export function DashboardShell({
         </SidebarContent>
         <SidebarFooter>
           <DashboardFooterNav />
+          <SignOutButton />
           <div className="flex items-center gap-2 p-1">
             <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-chart-1 text-[11px] font-bold">
-              {user.initials}
+              {getInitials(user.name)}
             </span>
             <div className="flex flex-col group-data-[collapsible=icon]:hidden">
               <span className="text-[13px] leading-tight font-medium">{user.name}</span>
               <span className="font-mono text-[11px] text-muted-foreground">
-                {user.handle}
+                @{user.handle}
               </span>
             </div>
           </div>
@@ -57,7 +60,7 @@ export function DashboardShell({
           <SidebarTrigger />
           <DashboardTopbarTitle />
           <div className="flex-1" />
-          <Button variant="outline" size="sm" nativeButton={false} render={<Link href="/@gabi" />}>
+          <Button variant="outline" size="sm" nativeButton={false} render={<Link href={`/@${user.handle}`} />}>
             <ExternalLink /> View storefront
           </Button>
         </header>

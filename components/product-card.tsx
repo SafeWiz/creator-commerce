@@ -41,7 +41,7 @@ export function ProductCover({
 export function ProductCard({ product }: { product: StoreProduct }) {
   return (
     <Link
-      href={`/@gabi/${product.slug}`}
+      href={`/${product.handle}/${product.id}/${product.slug}`}
       className="flex flex-col overflow-hidden rounded-xl bg-card ring-1 ring-foreground/10 transition-shadow hover:ring-foreground/15"
     >
       <ProductCover type={product.type} cover={product.cover} />

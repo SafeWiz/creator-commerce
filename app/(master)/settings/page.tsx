@@ -1,6 +1,6 @@
 import type { Metadata } from "next"
 
-import { users } from "@/lib/mock-data"
+import { requireUser } from "@/lib/server/dal/user"
 import { Button } from "@/components/ui/button"
 import {
   Card,
@@ -35,8 +35,8 @@ const NOTIFICATIONS = [
   },
 ]
 
-export default function SettingsPage() {
-  const user = users[0]
+export default async function SettingsPage() {
+  const user = await requireUser()
   return (
     <div className="mx-auto flex max-w-[640px] flex-col gap-4 p-6">
       <div className="flex items-end gap-3">
@@ -80,12 +80,12 @@ export default function SettingsPage() {
               </span>
               <input
                 id="handle"
-                defaultValue="gabi"
+                defaultValue={user.handle}
                 className="h-full flex-1 bg-transparent px-2.5 text-sm outline-none"
               />
             </div>
             <p className="text-[13px] text-muted-foreground">
-              creatorcommerce.com<span className="font-mono">/@gabi</span>
+              creatorcommerce.com<span className="font-mono">/@{user.handle}</span>
             </p>
           </div>
         </CardContent>

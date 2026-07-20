@@ -18,23 +18,23 @@ import { Separator } from "@/components/ui/separator"
 
 export async function generateMetadata({
   params,
-}: PageProps<"/[handle]/[slug]">): Promise<Metadata> {
-  const { slug } = await params
-  const product = storeProducts.find((p) => p.slug === slug) ?? storeProducts[0]
+}: PageProps<"/[handle]/[id]/[slug]">): Promise<Metadata> {
+  const { id } = await params
+  const product = storeProducts.find((p) => p.id === id) ?? storeProducts[0]
   return { title: product.name, description: product.blurb }
 }
 
 export default async function ProductPage({
   params,
-}: PageProps<"/[handle]/[slug]">) {
-  const { slug } = await params
-  // Static mock: unknown slugs fall back to the first product; notFound()
-  // wiring comes with real data.
-  const product = storeProducts.find((p) => p.slug === slug) ?? storeProducts[0]
+}: PageProps<"/[handle]/[id]/[slug]">) {
+  const { handle, id } = await params
+  // Static mock: unknown ids fall back to the first product; notFound()
+  // wiring comes with real data. The slug segment is decorative.
+  const product = storeProducts.find((p) => p.id === id) ?? storeProducts[0]
   return (
     <div className="mx-auto max-w-[1080px] px-6 pt-6 pb-16">
       <Link
-        href="/@gabi"
+        href={`/${handle}`}
         className="mb-4 inline-flex items-center gap-1.5 text-[13px] text-muted-foreground hover:text-foreground"
       >
         <ChevronLeft className="size-[15px]" /> All products

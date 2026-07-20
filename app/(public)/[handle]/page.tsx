@@ -35,7 +35,7 @@ export default async function StorefrontPage({ params }: { params: HandleParams}
       </div>
       <div className="grid grid-cols-3 gap-5">
         {storeProducts.map((product) => (
-          <ProductCard key={product.slug} product={product} />
+          <ProductCard key={product.id} product={product} />
         ))}
       </div>
     </div>

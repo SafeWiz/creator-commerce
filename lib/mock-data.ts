@@ -50,6 +50,9 @@ export const products: MockProduct[] = [
 ]
 
 export type StoreProduct = {
+  id: string
+  // Seller handle, including the leading "@" to match the [handle] segment.
+  handle: string
   slug: string
   name: string
   type: ProductType
@@ -59,12 +62,12 @@ export type StoreProduct = {
 }
 
 export const storeProducts: StoreProduct[] = [
-  { slug: "golden-hour-presets", name: "Golden Hour Presets", type: "ZIP", price: "$29", blurb: "20 warm, filmic Lightroom presets for portraits & travel.", cover: "#e7e6df" },
-  { slug: "notion-freelance-os", name: "Notion Freelance OS", type: "PDF", price: "$19", blurb: "The all-in-one Notion system to run your freelance business.", cover: "#dfe4dc" },
-  { slug: "ambient-loops-vol-2", name: "Ambient Loops Vol. 2", type: "Audio", price: "$12", blurb: "24 royalty-free ambient loops for focus and film.", cover: "#e5e2da" },
-  { slug: "portrait-lut-bundle", name: "Portrait LUT Bundle", type: "ZIP", price: "$34", blurb: "Cinematic color LUTs for video — DaVinci & Premiere.", cover: "#dde2e0" },
-  { slug: "client-contract-kit", name: "Client Contract Kit", type: "PDF", price: "$22", blurb: "Lawyer-reviewed contract templates for creatives.", cover: "#e6e3dd" },
-  { slug: "procreate-brush-set", name: "Procreate Brush Set", type: "ZIP", price: "$16", blurb: "48 textured brushes for illustration and lettering.", cover: "#dce3de" },
+  { id: "1", handle: "@gabi", slug: "golden-hour-presets", name: "Golden Hour Presets", type: "ZIP", price: "$29", blurb: "20 warm, filmic Lightroom presets for portraits & travel.", cover: "#e7e6df" },
+  { id: "2", handle: "@gabi", slug: "notion-freelance-os", name: "Notion Freelance OS", type: "PDF", price: "$19", blurb: "The all-in-one Notion system to run your freelance business.", cover: "#dfe4dc" },
+  { id: "3", handle: "@gabi", slug: "ambient-loops-vol-2", name: "Ambient Loops Vol. 2", type: "Audio", price: "$12", blurb: "24 royalty-free ambient loops for focus and film.", cover: "#e5e2da" },
+  { id: "4", handle: "@gabi", slug: "portrait-lut-bundle", name: "Portrait LUT Bundle", type: "ZIP", price: "$34", blurb: "Cinematic color LUTs for video — DaVinci & Premiere.", cover: "#dde2e0" },
+  { id: "5", handle: "@gabi", slug: "client-contract-kit", name: "Client Contract Kit", type: "PDF", price: "$22", blurb: "Lawyer-reviewed contract templates for creatives.", cover: "#e6e3dd" },
+  { id: "6", handle: "@gabi", slug: "procreate-brush-set", name: "Procreate Brush Set", type: "ZIP", price: "$16", blurb: "48 textured brushes for illustration and lettering.", cover: "#dce3de" },
 ]
 
 export const sales = [
