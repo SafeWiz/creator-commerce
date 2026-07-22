@@ -1,7 +1,7 @@
 import Link from "next/link"
 import { ExternalLink } from "lucide-react"
 
-import { requireUser } from "@/lib/server/dal/user"
+import { requireUser } from "@/lib/server/session"
 import { getInitials } from "@/lib/utils"
 import { Logo, Wordmark } from "@/components/logo"
 import {
