@@ -2,9 +2,9 @@
 
 import { useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
-import Image from "next/image"
 import { X } from "lucide-react"
 
+import { Image } from "@/components/image"
 import { UploadDropzone } from "@/lib/client/uploadthing"
 import { deleteProductImageAction } from "@/lib/actions/products"
 import { MAX_PRODUCT_IMAGES } from "@/lib/schemas/product"
