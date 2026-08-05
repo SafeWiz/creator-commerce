@@ -22,7 +22,18 @@ function Tooltip({ ...props }: TooltipPrimitive.Root.Props) {
 }
 
 function TooltipTrigger({ ...props }: TooltipPrimitive.Trigger.Props) {
-  return <TooltipPrimitive.Trigger data-slot="tooltip-trigger" {...props} />
+  return (
+    // Base UI's SSR pass and client hydration pass resolve the merge between
+    // this data-slot and a `render`-composed element's own data-slot (e.g.
+    // Button) in different orders, so the attribute itself can legitimately
+    // differ post-hydration. It's cosmetic — only used for CSS targeting —
+    // so it's safe to let React keep the client's value without a warning.
+    <TooltipPrimitive.Trigger
+      data-slot="tooltip-trigger"
+      suppressHydrationWarning
+      {...props}
+    />
+  )
 }
 
 function TooltipContent({

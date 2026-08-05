@@ -9,7 +9,7 @@ import { productStatus } from '@/lib/server/db/schemas/product'
  * this a user could append four at a time forever. Enforced in the endpoint's
  * middleware and, as a race backstop, in the DAL's append query.
  */
-export const MAX_PRODUCT_IMAGES = 8
+export const MAX_PRODUCT_IMAGES = 4
 
 /**
  * Validates the fields a user submits when creating a product.

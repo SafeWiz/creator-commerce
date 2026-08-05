@@ -3,6 +3,7 @@ import Link from "next/link"
 import { Check } from "lucide-react"
 
 import { checklist, kpis, topProducts } from "@/lib/mock-data"
+import { requireUser } from "@/lib/server/session"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -19,12 +20,14 @@ export const metadata: Metadata = {
   title: "Dashboard",
 }
 
-export default function DashboardPage() {
+export default async function DashboardPage() {
+  const user = await requireUser()
+
   return (
     <div className="mx-auto flex max-w-[1120px] flex-col gap-5 p-6">
       <div>
         <h1 className="font-heading text-2xl font-medium tracking-[-0.02em]">
-          Welcome back, Gabi
+          Welcome back, {user.name}
         </h1>
         <p className="mt-1 text-sm text-muted-foreground">
           Here&apos;s how your storefront is doing.
