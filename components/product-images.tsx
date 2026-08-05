@@ -1,11 +1,24 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import Image from "next/image"
+import { X } from "lucide-react"
 
 import { UploadDropzone } from "@/lib/client/uploadthing"
+import { deleteProductImageAction } from "@/lib/actions/products"
 import { MAX_PRODUCT_IMAGES } from "@/lib/schemas/product"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 
 export function ProductImages({
@@ -17,9 +30,22 @@ export function ProductImages({
 }) {
   const router = useRouter()
   const [error, setError] = useState<string | null>(null)
+  const [pending, startTransition] = useTransition()
   // `images` is server state — the urls already persisted for this product — so
   // this asks "is the product full?", not "is an upload in flight?".
   const atLimit = images.length >= MAX_PRODUCT_IMAGES
+
+  function removeImage(url: string) {
+    startTransition(async () => {
+      const result = await deleteProductImageAction(productId, url)
+      if (result.error) {
+        setError(result.error)
+        return
+      }
+      setError(null)
+      router.refresh()
+    })
+  }
 
   return (
     <Card>
@@ -35,7 +61,7 @@ export function ProductImages({
             {images.map((url) => (
               <div
                 key={url}
-                className="relative size-24 overflow-hidden rounded-lg border border-border bg-muted"
+                className="group relative size-24 overflow-hidden rounded-lg border border-border bg-muted"
               >
                 <Image
                   src={url}
@@ -44,6 +70,41 @@ export function ProductImages({
                   sizes="96px"
                   className="object-cover"
                 />
+                <AlertDialog>
+                  <AlertDialogTrigger
+                    render={
+                      <button
+                        type="button"
+                        aria-label="Remove image"
+                        disabled={pending}
+                        className="absolute right-1 top-1 flex size-5 items-center justify-center rounded-full bg-background/80 text-foreground opacity-0 transition-opacity group-hover:opacity-100 hover:bg-background disabled:opacity-50"
+                      >
+                        <X className="size-3.5" />
+                      </button>
+                    }
+                  />
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Remove image?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        This removes the image from the product. This can&apos;t
+                        be undone.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel disabled={pending}>
+                        Cancel
+                      </AlertDialogCancel>
+                      <AlertDialogAction
+                        variant="destructive"
+                        disabled={pending}
+                        onClick={() => removeImage(url)}
+                      >
+                        {pending ? "Removing…" : "Remove"}
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
               </div>
             ))}
           </div>

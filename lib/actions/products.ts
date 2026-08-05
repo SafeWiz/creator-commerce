@@ -7,6 +7,7 @@ import { z } from 'zod'
 import {
   createProduct,
   deleteUserProduct,
+  removeProductImage,
   updateUserProduct,
 } from '@/lib/server/dal/products'
 import { revalidateStorefront } from '@/lib/server/revalidate'
@@ -90,6 +91,27 @@ export async function updateProductAction(
   revalidatePath(`/products/${productId}`)
   revalidateStorefront()
   redirect('/products')
+}
+
+export async function deleteProductImageAction(
+  productId: number,
+  url: string,
+): Promise<{ error?: string }> {
+  const user = await requireUser()
+
+  if (!Number.isInteger(productId) || productId <= 0 || !url) {
+    return { error: 'Invalid request' }
+  }
+
+  const removed = await removeProductImage(productId, user.id, url)
+  if (!removed) {
+    return { error: 'Image not found' }
+  }
+
+  revalidatePath(`/products/${productId}`)
+  revalidateStorefront()
+
+  return {}
 }
 
 export async function deleteProductAction(id: string): Promise<void> {

@@ -101,6 +101,33 @@ export async function addProductImages(
   return product ?? null
 }
 
+// Owner-scoped removal of a single image url. array_remove is atomic (mirrors
+// the || append in addProductImages — no read-modify-write race). Returns the
+// removed url, or null when nothing matched (wrong owner/product, url not
+// present, or the row is soft-deleted).
+export async function removeProductImage(
+  id: number,
+  ownerId: string,
+  url: string,
+): Promise<string | null> {
+  const [product] = await db
+    .update(productsTable)
+    .set({
+      images: sql`array_remove(${productsTable.images}, ${url})`,
+    })
+    .where(
+      and(
+        eq(productsTable.id, id),
+        eq(productsTable.ownerId, ownerId),
+        isNull(productsTable.deletedAt),
+        sql`${url} = ANY(${productsTable.images})`,
+      ),
+    )
+    .returning({ images: productsTable.images })
+
+  return product ? url : null
+}
+
 export async function getUserProducts(ownerId: string): Promise<Product[]> {
   return db
     .select()
