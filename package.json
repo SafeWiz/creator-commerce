@@ -4,8 +4,8 @@
   "private": true,
   "scripts": {
     "schema:better-auth": "npx @better-auth/cli generate --output lib/server/db/schemas/auth.ts",
-    "schema:migrations:generate": "npx drizzle-kit generate",
-    "schema:migrations:run": "npx drizzle-kit migrate",
+    "schema:migrations:generate": "node --env-file=.env node_modules/drizzle-kit/bin.cjs generate",
+    "schema:migrations:run": "node --env-file=.env node_modules/drizzle-kit/bin.cjs migrate",
     "db:seed": "tsx --env-file=.env scripts/seed-products.ts",
     "dev": "next dev",
     "build": "next build",
