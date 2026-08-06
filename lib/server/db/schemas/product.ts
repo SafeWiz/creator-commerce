@@ -1,3 +1,4 @@
+import { sql } from 'drizzle-orm'
 import { index, integer, pgTable, text, timestamp, varchar } from 'drizzle-orm/pg-core'
 
 import { user } from './auth'
@@ -30,7 +31,21 @@ export const productsTable = pgTable(
     // Soft-delete tombstone: null = live, set = deleted. Reads filter it out.
     deletedAt: timestamp('deleted_at'),
   },
-  (table) => [index('products_ownerId_idx').on(table.ownerId)],
+  (table) => [
+    index('products_ownerId_idx').on(table.ownerId),
+    // Trigram GIN indexes: a plain btree can't accelerate ILIKE '%term%'
+    // (leading wildcard), but pg_trgm's opclass can.
+    index('products_name_trgm_idx').using('gin', sql`${table.name} gin_trgm_ops`),
+    index('products_description_trgm_idx').using(
+      'gin',
+      sql`${table.description} gin_trgm_ops`,
+    ),
+    // Partial btree for the common "no search term, browse newest published"
+    // path — keeps drafts/soft-deleted rows out of the index entirely.
+    index('products_published_created_idx')
+      .on(table.status, table.createdAt)
+      .where(sql`${table.deletedAt} is null`),
+  ],
 )
 
 export type Product = typeof productsTable.$inferSelect

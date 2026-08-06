@@ -22,6 +22,13 @@
       "when": 1785773090764,
       "tag": "0002_chemical_archangel",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1785949197918,
+      "tag": "0003_loving_patch",
+      "breakpoints": true
     }
   ]
 }

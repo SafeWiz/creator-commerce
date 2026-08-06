@@ -1,9 +1,10 @@
 import 'server-only'
 
-import { and, eq, isNull, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, ilike, isNull, ne, or, sql } from 'drizzle-orm'
 
 import { MAX_PRODUCT_IMAGES } from '@/lib/schemas/product'
 import db from '@/lib/server/db'
+import { user } from '@/lib/server/db/schemas/auth'
 import {
   productsTable,
   type Product,
@@ -194,6 +195,73 @@ export async function getPublishedProduct(
     .limit(1)
 
   return product ?? null
+}
+
+export type ProductSort = 'newest' | 'oldest'
+
+export type SearchedProduct = {
+  id: number
+  slug: string
+  name: string
+  description: string | null
+  priceInCents: number
+  currency: string
+  images: string[]
+  sellerHandle: string
+}
+
+const MIN_SEARCH_QUERY_LENGTH = 3
+
+// Escapes ILIKE's special characters so a literal '%' or '_' typed by a user
+// can't turn into a wildcard, and '\' can't start an unintended escape.
+function escapeLikePattern(input: string): string {
+  return input.replace(/[\\%_]/g, (char) => `\\${char}`)
+}
+
+// Cross-seller browse/search: published, non-deleted products from every
+// seller except excludeOwnerId, optionally filtered by a name/description
+// substring. Newest/oldest 50, no pagination.
+export async function searchPublishedProducts(
+  query: string,
+  sort: ProductSort,
+  excludeOwnerId: string,
+): Promise<SearchedProduct[]> {
+  const trimmed = query.trim()
+
+  const conditions = [
+    eq(productsTable.status, 'published'),
+    isNull(productsTable.deletedAt),
+    ne(productsTable.ownerId, excludeOwnerId),
+  ]
+
+  if (trimmed.length >= MIN_SEARCH_QUERY_LENGTH) {
+    const pattern = `%${escapeLikePattern(trimmed)}%`
+    conditions.push(
+      or(
+        ilike(productsTable.name, pattern),
+        ilike(productsTable.description, pattern),
+      )!,
+    )
+  }
+
+  return db
+    .select({
+      id: productsTable.id,
+      slug: productsTable.slug,
+      name: productsTable.name,
+      description: productsTable.description,
+      priceInCents: productsTable.priceInCents,
+      currency: productsTable.currency,
+      images: productsTable.images,
+      sellerHandle: user.handle,
+    })
+    .from(productsTable)
+    .innerJoin(user, eq(user.id, productsTable.ownerId))
+    .where(and(...conditions))
+    .orderBy(
+      sort === 'oldest' ? asc(productsTable.createdAt) : desc(productsTable.createdAt),
+    )
+    .limit(50)
 }
 
 // Owner-scoped so a user can only ever load their own product.

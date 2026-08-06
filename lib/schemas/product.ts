@@ -35,3 +35,16 @@ export const createProductSchema = z.object({
 })
 
 export type CreateProductInput = z.infer<typeof createProductSchema>
+
+/**
+ * Validates the /explore page's `q`/`sort` search params.
+ *
+ * Parsed with `safeParse` rather than `parse` — malformed or repeated query
+ * params should fall back to defaults, not throw.
+ */
+export const productSearchParamsSchema = z.object({
+  q: z.string().trim().max(255).default(''),
+  sort: z.enum(['newest', 'oldest']).default('newest'),
+})
+
+export type ProductSearchParams = z.infer<typeof productSearchParamsSchema>

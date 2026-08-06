@@ -4,6 +4,7 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import {
   CircleHelp,
+  Compass,
   Download,
   Heart,
   LayoutDashboard,
@@ -27,7 +28,10 @@ type NavItem = { label: string; href: string; icon: LucideIcon }
 
 const NAV_GROUPS: { label?: string; items: NavItem[] }[] = [
   {
-    items: [{ label: "Dashboard", href: "/dashboard", icon: LayoutDashboard }],
+    items: [
+      { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
+      { label: "Explore", href: "/explore", icon: Compass },
+    ],
   },
   {
     label: "Selling",

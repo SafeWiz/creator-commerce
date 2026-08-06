@@ -32,6 +32,7 @@ app/
 └── (master)/
     ├── layout.tsx                 # dashboard shell (sidebar, topbar)
     ├── dashboard/page.tsx         # /dashboard
+    ├── explore/page.tsx           # /explore
     ├── products/
     │   ├── page.tsx               # /products
     │   ├── new/page.tsx           # /products/new
@@ -84,6 +85,7 @@ Authenticated app shell (`app/(master)/layout.tsx`): sidebar nav, topbar, conten
 
 ```
 Overview
+Explore
 ── Selling ──
 Products
 Sales
@@ -101,6 +103,7 @@ Five page archetypes — design one template per archetype, reuse across pages. 
 | Route | Page | Archetype | Key features | Sessions |
 |---|---|---|---|---|
 | `/dashboard` | Overview | Stats/overview | KPIs: revenue, units sold, top 5 products; onboarding checklist | S1, S10, S12, S18 |
+| `/explore` | Explore / search | Grid | Cross-seller search of **Published** products by name/description substring (ILIKE, min 3 chars), sort by created date, top 50 results, no pagination, excludes the current user's own listings | ext |
 | `/products` | Product list | Data table | Filtering, search, pagination, Draft/Published status, duplicate | S1, S12 |
 | `/sales` | Sales | Data table | Sales table + analytics | S1, S12 |
 | `/purchases` | Order history | Data table | Buyer's orders: product, creator, date, amount, receipt link, download shortcut. History/receipts view — file access lives in `/downloads`. | ext |
