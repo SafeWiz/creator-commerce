@@ -230,7 +230,14 @@ export function ProductForm({
       {isNew ? (
         <ProductFileField upload={upload} />
       ) : (
-        file && <ProductFileSummary name={file.name} sizeBytes={file.sizeBytes} />
+        file &&
+        productId != null && (
+          <ProductFileSummary
+            productId={productId}
+            name={file.name}
+            sizeBytes={file.sizeBytes}
+          />
+        )
       )}
 
       {/* Uploads attach to an existing row, so this only appears once the

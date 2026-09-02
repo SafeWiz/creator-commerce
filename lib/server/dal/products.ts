@@ -226,11 +226,34 @@ export async function removeProductImage(
   return product ?? null
 }
 
+// Only what the storefront grid's ProductCard renders (see ProductCardProduct
+// in components/product-card.tsx, which this type must stay assignable to).
+// fileKey, fileName and fileSizeBytes describe the product's file, which is
+// private, and which has no business reaching an unauthenticated storefront
+// page just because the row happens to be selected in full.
+export type StorefrontProduct = {
+  id: number
+  slug: string
+  name: string
+  description: string | null
+  priceInCents: number
+  images: string[]
+}
+
 // Storefront read: everything a seller has published, oldest first. Scoped by
 // owner and status so drafts and soft-deleted rows never reach a public page.
-export async function getPublishedProducts(ownerId: string): Promise<Product[]> {
+export async function getPublishedProducts(
+  ownerId: string,
+): Promise<StorefrontProduct[]> {
   return db
-    .select()
+    .select({
+      id: productsTable.id,
+      slug: productsTable.slug,
+      name: productsTable.name,
+      description: productsTable.description,
+      priceInCents: productsTable.priceInCents,
+      images: productsTable.images,
+    })
     .from(productsTable)
     .where(
       and(
@@ -241,14 +264,32 @@ export async function getPublishedProducts(ownerId: string): Promise<Product[]> 
     )
 }
 
+// Only what the single product page renders. No slug: that page links back to
+// the storefront by handle alone and never needs its own. Same reasoning as
+// StorefrontProduct above for leaving the file columns out — a public product
+// page is exactly the page a stolen fileKey would be most useful on.
+export type StorefrontProductDetail = {
+  id: number
+  name: string
+  description: string | null
+  priceInCents: number
+  images: string[]
+}
+
 // Public product page read. Takes the ownerId resolved from the URL's handle so
 // a product can only be reached under the seller that actually owns it.
 export async function getPublishedProduct(
   id: number,
   ownerId: string,
-): Promise<Product | null> {
+): Promise<StorefrontProductDetail | null> {
   const [product] = await db
-    .select()
+    .select({
+      id: productsTable.id,
+      name: productsTable.name,
+      description: productsTable.description,
+      priceInCents: productsTable.priceInCents,
+      images: productsTable.images,
+    })
     .from(productsTable)
     .where(
       and(

@@ -40,7 +40,16 @@
   race in `addProductImages` is already stored by the time the row rejects it.
   Both want the same `deleteUploadedFiles` call — the first from
   `deleteProductAction`, the second from the upload callback when the append
-  returns null.
+  returns null. A soft-deleted product also keeps its product file, up to
+  100MB and — unlike an image — unreachable by anything except a signed url, so
+  it sits in storage for as long as the row exists to sign against.
+
+- **Product files uploaded before signed downloads are still `public-read`.**
+  `acl` is a per-upload setting, so making `productFile` private only binds
+  uploads from that point on. Every key already in storage stays fetchable by
+  url alone. These are dev files and the product database is due a wipe, so
+  nothing was backfilled; if any of them ever matter, the fix is a one-off
+  `utapi.updateACL(keys, 'private')` over every non-null `products.file_key`.
 
 - **Uploaded files keep their original filenames, so UploadThing's UI is
   unusable for tracking.** `productImage` never renames anything, so storage is a
@@ -176,12 +185,17 @@ ordered by `createdAt`, top 50, no pagination. Three known limits:
   (e.g. under `lib/schemas/`) and have the DB schema import it from there.
   `lib/schemas/purchase.ts` already does it the right way round — copy that.
 
-## Purchases
+- **`products.file_key`, `file_name` and `file_size_bytes` should be `NOT NULL`.**
+  Every product created since the columns exist carries all three; only rows
+  predating them are null. `lib/server/dal/downloads.ts` therefore filters them
+  out in its `where` and casts the columns with `sql<string>` / `sql<number>`,
+  because drizzle infers nullability from the schema and cannot see the
+  predicate. Making the columns `NOT NULL` deletes those casts and the three
+  `isNotNull` filters. Deferred until the product database is wiped, since the
+  migration fails loudly if any null row survives — which is the correct
+  behaviour, just not something to hit mid-feature.
 
-- **`/downloads` is still mock, and can't be fixed by the purchases table.** Its
-  `type` and `size` columns describe a digital asset file, and `productsTable`
-  has no asset column at all — only `images`. It needs product file uploads
-  first; after that it's a join from `purchases` like `/purchases` is.
+## Purchases
 
 - **Dashboard KPIs are still mock.** Revenue, Units sold and Products could all
   be derived now (`getSellerTotals` already computes the first two), but

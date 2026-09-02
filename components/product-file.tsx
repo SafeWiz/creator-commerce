@@ -1,7 +1,7 @@
 "use client"
 
 import { useRef, useState } from "react"
-import { Check, FileUp, Loader2, Paperclip } from "lucide-react"
+import { Check, Download, FileUp, Loader2, Paperclip } from "lucide-react"
 
 import { useUploadThing } from "@/lib/client/uploadthing"
 import {
@@ -182,12 +182,20 @@ export function ProductFileField({ upload }: { upload: ProductFileUpload }) {
  *
  * A product's file is chosen once, when the product is created. There is no
  * replacing it and no removing it — buyers hold a claim on what they paid for,
- * so the only way to withdraw a file is to delete the product it belongs to.
+ * so a file can never be withdrawn once sold. Deleting the product only takes
+ * it out of the catalogue: `getDownloadableProductFile` in
+ * lib/server/dal/downloads.ts deliberately does not filter `deletedAt`, so
+ * paid downloads keep working for both the buyer and the seller regardless.
+ *
+ * The download is here because private uploads took the seller's only other
+ * way to see what they are selling: there is no public url any more.
  */
 export function ProductFileSummary({
+  productId,
   name,
   sizeBytes,
 }: {
+  productId: number
   name: string
   sizeBytes: number
 }) {
@@ -205,6 +213,17 @@ export function ProductFileSummary({
           <span className="text-sm text-muted-foreground">
             {formatFileSize(sizeBytes)}
           </span>
+          {/* The same route buyers use. Its entitlement check is "bought it, or
+              own it", so the seller needs nothing of their own — and a plain
+              <a> rather than next/link, because the href is a route handler. */}
+          <Button
+            variant="outline"
+            size="sm"
+            nativeButton={false}
+            render={<a href={`/downloads/${productId}`} />}
+          >
+            <Download className="size-3.5" /> Download
+          </Button>
         </div>
         <p className="text-sm text-muted-foreground">
           The file is set when the product is created and can&apos;t be replaced.

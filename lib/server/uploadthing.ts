@@ -73,7 +73,24 @@ export const uploadRouter = {
    * which is all UploadThing's config can express; MAX_PRODUCT_FILE_BYTES is the
    * real ceiling and the checks below are what enforce it.
    */
-  productFile: f({ blob: { maxFileSize: '128MB', maxFileCount: 1 } })
+  productFile: f({
+    blob: {
+      maxFileSize: '128MB',
+      maxFileCount: 1,
+      // Paid content, so it must not be fetchable by url alone. Downloads go
+      // through /downloads/[productId], which checks entitlement and mints a
+      // short-lived signed url per click.
+      //
+      // Needs ACL overrides enabled for the app; without them this throws at
+      // presign. That is the right failure — quietly falling back to
+      // public-read is the one outcome we cannot have.
+      acl: 'private',
+      // Defaults to 'inline', which renders a pdf or a txt in a tab rather than
+      // downloading it. A cross-origin `<a download>` is ignored by browsers,
+      // so this header is the only thing that makes the click a download.
+      contentDisposition: 'attachment',
+    },
+  })
     .middleware(async ({ files }) => {
       // getUser(), not requireUser(): a redirect is the wrong response shape
       // for an upload endpoint.
@@ -170,4 +187,24 @@ export async function deleteUploadedFileKeys(keys: string[]) {
   } catch (error) {
     console.error('Failed to delete files from UploadThing storage', error)
   }
+}
+
+/**
+ * A short-lived url for a private product file.
+ *
+ * `generateSignedURL`, not `getSignedURL`: it signs locally with the app secret
+ * instead of calling UploadThing, and the fetching variant is deprecated in v8
+ * and removed in v9.
+ *
+ * Five minutes rather than seconds. The url never reaches the page — the
+ * download route redirects to it and nothing else ever holds it — so its
+ * lifetime is only exposed to whoever already had it, and a 100MB transfer that
+ * drops and is retried by the browser should succeed rather than 403.
+ *
+ * This signs whatever key it is handed. Checking that the caller is allowed to
+ * have it happens in the DAL, before this is reached.
+ */
+export async function signProductFileUrl(key: string) {
+  const { ufsUrl } = await utapi.generateSignedURL(key, { expiresIn: '5m' })
+  return ufsUrl
 }
