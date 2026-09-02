@@ -131,3 +131,51 @@ export const productUploadsTable = pgTable(
 )
 
 export type ProductUpload = typeof productUploadsTable.$inferSelect
+
+/**
+ * Images uploaded for a product that does not exist yet, or for one whose form
+ * has not been saved.
+ *
+ * The same indirection `product_uploads` gives the product file, for the same
+ * reason: the bytes land while the form is still being filled in, so there is
+ * nothing to hang them on until the user saves. The completion callback writes
+ * here; saving copies the urls onto the product.
+ *
+ * Deliberately a second table rather than a `kind` column on `product_uploads`.
+ * The real difference between the two is ACL, not shape — images are uploaded
+ * `public-read` and the product file is uploaded `private`. Sharing one table
+ * would let a client submit an image's key as a product's `fileKey`: the lookup
+ * would succeed and the product would end up selling a publicly fetchable file.
+ * Two tables make that unrepresentable.
+ *
+ * Also unlike `product_uploads`, a row here is deleted the moment it is claimed.
+ * It is the pending state and nothing else — once the url is in
+ * `products.images`, the product is the record. That is what lets the orphan
+ * sweep find candidates by age alone.
+ */
+export const productImageUploadsTable = pgTable(
+  'product_image_uploads',
+  {
+    id: integer().primaryKey().generatedAlwaysAsIdentity(),
+    ownerId: text('owner_id')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    // UploadThing's file key — what deleting the file from storage takes.
+    key: varchar({ length: 255 }).notNull(),
+    // The ufsUrl, which is what products.images stores. Kept alongside the key
+    // so neither the claim nor the sweep has to parse one out of the other.
+    url: varchar({ length: 512 }).notNull(),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+  },
+  (table) => [
+    // A retried completion callback describes a row that already exists, so it
+    // writes one row rather than two.
+    uniqueIndex('product_image_uploads_key_unq').on(table.key),
+    // The claim looks rows up by url, because the url is what the form submits.
+    uniqueIndex('product_image_uploads_url_unq').on(table.url),
+    // The sweep's only filter is age.
+    index('product_image_uploads_createdAt_idx').on(table.createdAt),
+  ],
+)
+
+export type ProductImageUpload = typeof productImageUploadsTable.$inferSelect

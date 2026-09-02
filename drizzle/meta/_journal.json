@@ -57,6 +57,13 @@
       "when": 1786555847000,
       "tag": "0007_bitter_natasha_romanoff",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1788368691288,
+      "tag": "0008_melted_baron_strucker",
+      "breakpoints": true
     }
   ]
 }

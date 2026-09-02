@@ -190,7 +190,9 @@ deleteUserProduct(id: number, ownerId: string): Promise<{ images: string[] } | n
 
 `setProductImages` runs three steps against the owner-scoped product:
 
-1. Reject outright if `urls.length > MAX_PRODUCT_IMAGES`.
+1. Reject outright if `urls.length > MAX_PRODUCT_IMAGES`, or if the list holds
+   the same url twice — the form cannot produce a duplicate, so a list with one
+   is not a list this user built.
 2. Partition the input: urls the product already holds, and urls that match an
    owned staged row. Anything in neither bucket means the list is not one this
    user could have built, so nothing is written and the call returns null.
@@ -204,13 +206,25 @@ middle image keeps the rest in place, and the first url is still the cover.
 
 `createProductAction` and `updateProductAction` both gain an `images` field: a
 JSON-encoded url array in the `FormData`, parsed by a `z.string().transform(...)`
-in `lib/schemas/product.ts` and bounded by `MAX_PRODUCT_IMAGES`. Each calls
-`setProductImages` after the product row is written, then
-`deleteUploadedFiles(removed)`.
+in `lib/schemas/product.ts` and bounded by `MAX_PRODUCT_IMAGES`. The field is
+required rather than defaulted: the form always sends it — `"[]"` when there are
+none — so an absent field is a broken client, and on the update path an empty
+list means "remove every image", which must not look the same as a missing one.
+It rides on `saveProductSchema`, not `createProductSchema` — that one is the
+client form's resolver schema, and the images are not a field any input is bound
+to.
 
-For create, that is a second statement rather than part of the insert. The
+For create, the commit is a second statement rather than part of the insert. The
 product exists either way, and an image that fails to attach is a smaller problem
-than a product that fails to exist.
+than a product that fails to exist — so a rejected list still creates the product
+and redirects to `/products/{id}`, where the gap is visible, instead of to the
+list, where it would not be.
+
+For update, the commit runs **before** the field write, so a list this user could
+not have built stops the save before anything is written. `deleteUploadedFiles`
+then runs whether or not the field update matched a row: by that point the urls
+are detached from the product and have no staging row, so it is the last chance
+to reach them.
 
 `removeProductImageAction` is replaced by `discardStagedImagesAction(urls)`,
 which discards owner-scoped staged rows and deletes their files.
@@ -224,21 +238,25 @@ is set.
 
 ```tsx
 <ProductImages
-  value={string[]}          // urls, committed and staged together, in order
-  staged={Set<string>}      // which of them have no product row behind them
-  onChange={(urls) => void}
-  onDiscardStaged={(urls) => void}
+  images={string[]}                    // urls, committed and staged together, in order
+  error={string | null}                // the form's message and the dropzone's, one slot
+  onError={(message) => void}
+  onUploaded={(urls) => void}
+  onRemove={(url) => void}
 />
 ```
 
 It renders on both pages now — no `productId`, no `router.refresh()`, no server
-call of its own. `UploadDropzone` keeps `mode: 'auto'` and appends the url from
-`onClientUploadComplete` to `value`, marking it staged.
+call of its own. Which urls are staged stays private to the form: the component
+reports only that files arrived, that one was dismissed, or that something went
+wrong. `UploadDropzone` keeps `mode: 'auto'`, and trims a batch to the remaining
+slots in `onBeforeUploadBegin` so nothing uploads that could not fit.
 
 `ProductForm` owns the list, seeded from the `images` prop, and submits it as the
-`images` field. Its X handler branches on `staged`: a staged url is dropped from
-state and sent to `discardStagedImagesAction`; a committed one is dropped from
-state and nothing else.
+`images` field. It keeps the staged set in a ref and branches there: a staged url
+is dropped from state and sent to `discardStagedImagesAction`; a committed one is
+dropped from state and nothing else. The list is mirrored in a second ref so two
+uploads completing in one tick cannot both claim the same remaining slots.
 
 **Discard** becomes a `<button>` rather than a `<Link>`: it discards the staged
 urls, then routes to `/products`. When nothing is staged it is what it was.

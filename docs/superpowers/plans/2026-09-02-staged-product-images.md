@@ -12,7 +12,8 @@ Spec: `docs/superpowers/specs/2026-09-02-staged-product-images-design.md`
 
 ## Global Constraints
 
-- **Do not run npm/npx yourself.** Gabi runs every script: `npm install`, `npx tsc --noEmit`, `npm run lint`, `npm run build`, `npm run schema:migrations:generate`, `npm run schema:migrations:run`. When a step needs one, ask him and wait for the output before continuing.
+- **Verification you may run yourself:** `npx tsc --noEmit` and `npm run lint`. Nothing else. Everything with side effects goes to Gabi — `npm install`, `npm run schema:migrations:generate`, `npm run schema:migrations:run`, `npm run dev`, `npm run build`. When a step needs one of those, stop and report; do not run it.
+- `npm run build` does not work in this sandbox (it fetches Google Fonts over a blocked network). `npx tsc --noEmit` is the type gate.
 - **This is not the Next.js in your training data.** Read the relevant guide in `node_modules/next/dist/docs/` before writing route, action or caching code (`AGENTS.md`).
 - Every module under `lib/server/` starts with `import 'server-only'`. Every module under `lib/client/` starts with `import 'client-only'`.
 - **Server actions never query tables.** They resolve the user, parse input, call a DAL function, then handle `revalidatePath`/`redirect`.
@@ -157,7 +158,7 @@ npm run schema:migrations:run
 
 Expected: a new `drizzle/0008_*.sql` creating `product_image_uploads` with the two unique indexes, one plain index, and the `owner_id` foreign key with `ON DELETE cascade`. Read the generated SQL and confirm it before continuing. If it contains any statement touching `products`, `product_uploads`, or any auth table, stop and report — this task adds a table and nothing else.
 
-- [ ] **Step 4: Ask Gabi to typecheck**
+- [ ] **Step 4: Typecheck**
 
 Run: `npx tsc --noEmit`
 Expected: no errors.
@@ -321,19 +322,26 @@ Replace the whole function:
  * can ever reach. The product's file is deliberately left alone: buyers hold a
  * claim on what they paid for.
  *
- * The row is read before the update rather than returned from it, because
- * RETURNING yields the new values and the new value is the empty array.
+ * Two statements, in this order, because the tombstone is what makes the read
+ * safe. RETURNING yields post-update values, and this first statement does not
+ * touch `images` — so it reports the list as it stood, atomically. Every writer
+ * of that column requires `deleted_at is null`, so once this returns, nothing
+ * can add an image to this product again. Reading first and clearing second
+ * would leave a window where a concurrent save's url is wiped by a stale list
+ * and its staging row is already claimed, leaving a file nothing references and
+ * no sweep can find.
+ *
+ * A failure between the two leaves a deleted product still holding its urls.
+ * That costs storage and breaks nothing — the images stay referenced, so the
+ * sweep leaves them alone too.
  */
 export async function deleteUserProduct(
   id: number,
   ownerId: string,
 ): Promise<{ images: string[] } | null> {
-  const product = await getUserProduct(id, ownerId)
-  if (!product) return null
-
   const [deleted] = await db
     .update(productsTable)
-    .set({ deletedAt: new Date(), images: [] })
+    .set({ deletedAt: new Date() })
     .where(
       and(
         eq(productsTable.id, id),
@@ -341,13 +349,22 @@ export async function deleteUserProduct(
         isNull(productsTable.deletedAt),
       ),
     )
-    .returning({ id: productsTable.id })
+    .returning({ images: productsTable.images })
 
-  return deleted ? { images: product.images } : null
+  if (!deleted) return null
+
+  // Owner and tombstone are already proven by the statement above; the id is
+  // all this needs.
+  await db
+    .update(productsTable)
+    .set({ images: [] })
+    .where(eq(productsTable.id, id))
+
+  return { images: deleted.images }
 }
 ```
 
-- [ ] **Step 4: Ask Gabi to typecheck**
+- [ ] **Step 4: Typecheck**
 
 Run: `npx tsc --noEmit`
 Expected: exactly three errors, all of them callers this plan rewrites next —
@@ -415,17 +432,27 @@ export const productImagesField = z
   )
 ```
 
-Then add it to both product schemas — `createProductSchema` gains nothing (update reuses it), so put it on each explicitly:
+`productImagesField` must be declared **before** `createProductSchema`, which is otherwise unchanged — the images do not belong on it. That schema is shared with the client: `ProductForm` hands it to `zodResolver` and the edit page builds its prefill from `z.input` of it, and `images` is not a field any input is bound to. Add a server-side schema instead, after `CreateProductInput`:
 
 ```ts
-export const createProductSchema = z.object({
-  // …existing fields unchanged…
-  status: z.enum(productStatus).default('draft'),
+/**
+ * What a save actually submits: the user's fields, plus the image list.
+ *
+ * Separate from createProductSchema because that one is shared with the client
+ * form, which validates it through zodResolver. The images are not a field the
+ * user types into — the form holds them as state and serialises them at submit
+ * — so putting them in the resolver's schema would make every prefill and every
+ * form value type carry a field no input is bound to.
+ *
+ * Both actions parse this: creating and updating differ in what they do with
+ * the result, not in what the form sends.
+ */
+export const saveProductSchema = createProductSchema.extend({
   images: productImagesField,
 })
 ```
 
-`createProductWithFileSchema` extends `createProductSchema`, so it inherits the field.
+and change `createProductWithFileSchema` to extend `saveProductSchema`.
 
 - [ ] **Step 2: Rewrite the actions**
 
@@ -451,9 +478,10 @@ In `createProductAction`, parse the new field and commit the images after the in
 ```ts
   const parsed = createProductWithFileSchema.safeParse({
     ...Object.fromEntries(formData.entries()),
-    // Explicit, because a form that submits no images must parse as an empty
-    // list rather than as a missing field.
-    images: formData.get('images') ?? '[]',
+    // Required, not defaulted. The form always sends the field — "[]" when
+    // there are none — so an absent one is a broken client, and saying so beats
+    // reading it as "no images".
+    images: formData.get('images'),
   })
 
   if (!parsed.success) {
@@ -483,43 +511,64 @@ In `createProductAction`, parse the new field and commit the images after the in
     }
   }
 
-  // A second statement rather than part of the insert. The product exists either
-  // way, and images that fail to attach are a smaller problem than a product
-  // that fails to exist — the user can add them again; a lost product cannot be
-  // recovered from a submitted form.
-  if (images.length > 0) {
-    await setProductImages(product.id, user.id, images)
+  // A second statement rather than part of the insert. The product exists
+  // either way, and images that fail to attach are a smaller problem than a
+  // product that fails to exist — the user can add them again; a lost product
+  // cannot be recovered from a submitted form.
+  const committed =
+    images.length > 0 ? await setProductImages(product.id, user.id, images) : null
+
+  revalidatePath('/products')
+  revalidateStorefront()
+
+  // The list was not one this user could have built, so none of it attached.
+  // The product page is the only place that gap is visible and fixable; the
+  // list would look perfectly fine.
+  if (images.length > 0 && !committed) {
+    redirect(`/products/${product.id}`)
   }
+
+  redirect(`/products`)
 ```
 
-In `updateProductAction`, add `images` to the parse and commit after the update:
+In `updateProductAction`, parse with `saveProductSchema` and commit the images **before** the field update:
 
 ```ts
-  const parsed = createProductSchema.safeParse({
+  const parsed = saveProductSchema.safeParse({
     name: formData.get('name'),
     // Absent field reads as null; the schema's optional string wants undefined.
     description: formData.get('description') ?? undefined,
     price: formData.get('price'),
     status: formData.get('status'),
-    images: formData.get('images') ?? '[]',
+    images: formData.get('images'),
   })
 ```
 
 ```ts
   const { name, description, price, status, images } = parsed.data
 
-  const product = await updateUserProduct({ /* …unchanged… */ })
-
-  if (!product) {
-    return { formError: 'Product not found' }
-  }
-
-  // Owner-scoped and validated url by url, so a list the user could not have
-  // built writes nothing. `removed` is what is no longer referenced anywhere.
+  // Images first, so a list this user could not have built stops the whole save
+  // before anything is written. Reversed, a rejected list would leave the other
+  // fields updated and the user told the save failed.
   const committed = await setProductImages(productId, user.id, images)
   if (!committed) {
     return { formError: 'Those images could not be saved' }
   }
+
+  const product = await updateUserProduct({ /* …unchanged… */ })
+
+  if (!product) {
+    // The images above did commit, so this is not a no-op failure: the product
+    // was deleted between the two statements. Revalidate before reporting, or
+    // the caches keep serving the images the row no longer has.
+    revalidatePath('/products')
+    revalidatePath(`/products/${productId}`)
+    revalidateStorefront()
+    return { formError: 'Product not found' }
+  }
+
+  // Detached above, deleted here: the row no longer points at these urls, so a
+  // failed storage delete costs storage rather than a broken page.
   await deleteUploadedFiles(committed.removed)
 ```
 
@@ -567,7 +616,7 @@ export async function deleteProductAction(id: string): Promise<void> {
 }
 ```
 
-- [ ] **Step 5: Ask Gabi to typecheck**
+- [ ] **Step 5: Typecheck**
 
 Run: `npx tsc --noEmit`
 Expected: two remaining errors, both closed by Task 4 —
@@ -853,7 +902,7 @@ Replace the gated block at the end of the form:
       />
 ```
 
-- [ ] **Step 6: Ask Gabi to typecheck and lint**
+- [ ] **Step 6: Typecheck and lint**
 
 Run: `npx tsc --noEmit && npm run lint`
 Expected: no errors. This is the commit where the repo typechecks again.
@@ -1045,7 +1094,7 @@ Note the row delete uses `inArray` semantics; if drizzle rejects the `sql` form 
       .where(inArray(productImageUploadsTable.id, batch.map((row) => row.id)))
 ```
 
-- [ ] **Step 3: Ask Gabi to typecheck**
+- [ ] **Step 3: Typecheck**
 
 Run: `npx tsc --noEmit`
 Expected: no errors. If `scripts/` is outside the `include` in `tsconfig.json`, add it — the file must be typechecked with everything else.

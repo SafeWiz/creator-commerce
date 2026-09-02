@@ -6,6 +6,7 @@
     "schema:better-auth": "npx @better-auth/cli generate --output lib/server/db/schemas/auth.ts",
     "schema:migrations:generate": "npx drizzle-kit generate",
     "schema:migrations:run": "npx drizzle-kit migrate",
+    "cleanup:images": "tsx --conditions=react-server --env-file=.env scripts/cleanup-orphaned-images.ts",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
@@ -45,6 +46,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.2.10",
     "tailwindcss": "^4",
+    "tsx": "^4.23.13",
     "typescript": "^5"
   }
 }

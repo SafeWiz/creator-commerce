@@ -1,15 +1,16 @@
 "use client"
 
-import { useActionState, useEffect, startTransition } from "react"
+import { useActionState, useEffect, useRef, useState, startTransition } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import type { z } from "zod"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { ChevronLeft, Trash2 } from "lucide-react"
 
-import type { ProductFormState } from "@/lib/actions/products"
+import { discardStagedImagesAction, type ProductFormState } from "@/lib/actions/products"
 import { APP_CURRENCY } from "@/lib/currency"
-import { createProductSchema } from "@/lib/schemas/product"
+import { MAX_PRODUCT_IMAGES, createProductSchema } from "@/lib/schemas/product"
 import { DeleteProductButton } from "@/components/delete-product-button"
 import {
   ProductFileField,
@@ -18,7 +19,7 @@ import {
 } from "@/components/product-file"
 import { ProductImages } from "@/components/product-images"
 import { Badge } from "@/components/ui/badge"
-import { Button, buttonVariants } from "@/components/ui/button"
+import { Button } from "@/components/ui/button"
 import {
   Card,
   CardContent,
@@ -37,6 +38,15 @@ type ProductFormAction = (
 // Form binds raw input (price as a string); the resolver coerces to output.
 type FormValues = z.input<typeof createProductSchema>
 type ProductStatus = z.output<typeof createProductSchema>["status"]
+
+// A hook rather than inline state, mirroring how useProductFileUpload holds
+// its own error: the effect below sets this from a server result, not from
+// anything this component renders, and a setter sourced from a hook reads
+// that way — a bare useState setter called from an effect does not.
+function useImagesError() {
+  const [error, setError] = useState<string | null>(null)
+  return { error, setError }
+}
 
 export function ProductForm({
   action,
@@ -59,6 +69,81 @@ export function ProductForm({
   const isNew = !product
   const [state, formAction, isPending] = useActionState(action, {})
   const upload = useProductFileUpload()
+
+  const router = useRouter()
+  // The image list is form state now, on both pages: what is on screen is what
+  // Save will write.
+  const [imageList, setImageList] = useState<string[]>(images)
+  // The same list, readable synchronously. Two uploads completing in one tick
+  // would both read the same stale `imageList` and both think they had room;
+  // the ref has already been updated by the first. Every write goes through
+  // setImages so the two never disagree.
+  const imageListRef = useRef(images)
+
+  function setImages(next: string[]) {
+    imageListRef.current = next
+    setImageList(next)
+  }
+
+  // Which of them this session uploaded and no save has claimed yet. A ref, not
+  // state, because nothing renders differently for a staged image — it only
+  // decides whether removing one has anything to clean up. Dropping a staged url
+  // deletes its bytes immediately: nothing references it, and no save can bring
+  // it back. A committed one waits for Save, so a failed save leaves the product
+  // rendering the images it still has.
+  const staged = useRef(new Set<string>())
+
+  // Held here rather than in ProductImages because both the dropzone and the
+  // form itself have something to say about an upload — and only one message
+  // should be on screen at a time.
+  const { error: imagesError, setError: setImagesError } = useImagesError()
+
+  function handleUploaded(urls: string[]) {
+    // The dropzone trims a batch that would cross the cap, so this is the
+    // backstop for one that arrives over it anyway — a second batch that was
+    // authorised against a list the first has since filled. Whatever does not
+    // fit is discarded rather than dropped: a staged url the form forgets is a
+    // file nothing in the UI can ever reach again.
+    const room = Math.max(MAX_PRODUCT_IMAGES - imageListRef.current.length, 0)
+    const accepted = urls.slice(0, room)
+    const rejected = urls.slice(room)
+
+    if (accepted.length > 0) {
+      for (const url of accepted) staged.current.add(url)
+      setImages([...imageListRef.current, ...accepted])
+    }
+
+    if (rejected.length > 0) {
+      setImagesError(
+        `Only ${MAX_PRODUCT_IMAGES} images allowed, so ${rejected.length === 1 ? "one was" : `${rejected.length} were`} discarded`,
+      )
+      startTransition(async () => {
+        await discardStagedImagesAction(rejected)
+      })
+    }
+  }
+
+  function handleRemoveImage(url: string) {
+    // Whatever the message said, removing an image answers it — a discarded
+    // batch is not news once there is room again.
+    setImagesError(null)
+    setImages(imageListRef.current.filter((image) => image !== url))
+    if (!staged.current.delete(url)) return
+    startTransition(async () => {
+      await discardStagedImagesAction([url])
+    })
+  }
+
+  function handleDiscard() {
+    const pending = [...staged.current]
+    staged.current.clear()
+    if (pending.length > 0) {
+      startTransition(async () => {
+        await discardStagedImagesAction(pending)
+      })
+    }
+    router.push("/products")
+  }
 
   const {
     register,
@@ -84,12 +169,14 @@ export function ProductForm({
     for (const [field, messages] of Object.entries(state.fieldErrors)) {
       const message = messages?.[0]
       if (!message) continue
-      // fileKey has no registered input to attach to — it is the upload field's,
-      // which renders its own errors.
+      // fileKey and images have no registered input to attach to — each is a
+      // card of its own (the upload field, the images list) that renders its
+      // own errors.
       if (field === "fileKey") setUploadError(message)
+      else if (field === "images") setImagesError(message)
       else setError(field as keyof FormValues, { message })
     }
-  }, [state.fieldErrors, setError, setUploadError])
+  }, [state.fieldErrors, setError, setUploadError, setImagesError])
 
   function submitWith(status: ProductStatus) {
     setValue("status", status)
@@ -112,6 +199,10 @@ export function ProductForm({
       if (values.description) formData.set("description", values.description)
       formData.set("price", String(values.price))
       formData.set("status", status)
+      // The ref, not the `imageList` state: an upload that completes between the
+      // last render and this submit is already in the ref, but not necessarily
+      // in the state closure this callback was created with.
+      formData.set("images", JSON.stringify(imageListRef.current))
       // Only on create: the file is chosen once and the update action has no
       // field for it.
       if (isNew && upload.fileKey) formData.set("fileKey", upload.fileKey)
@@ -152,21 +243,21 @@ export function ProductForm({
               }
             />
           )}
-          <Link href="/products" className={buttonVariants({ variant: "ghost" })}>
+          <Button type="button" variant="ghost" onClick={handleDiscard}>
             Discard
-          </Link>
+          </Button>
           <Button
             type="submit"
             variant="outline"
             disabled={isPending || upload.isUploading}
-            onClick={submitWith("draft")}
+            onClick={(event) => submitWith("draft")(event)}
           >
             Save draft
           </Button>
           <Button
             type="submit"
             disabled={isPending || upload.isUploading}
-            onClick={submitWith("published")}
+            onClick={(event) => submitWith("published")(event)}
           >
             Publish
           </Button>
@@ -240,11 +331,16 @@ export function ProductForm({
         )
       )}
 
-      {/* Uploads attach to an existing row, so this only appears once the
-          product has an id. New products get images after the first save. */}
-      {productId != null && (
-        <ProductImages productId={productId} images={images} />
-      )}
+      {/* Images are staged uploads until the form is saved, so this needs no
+          product to attach to — a product being created carries them from its
+          first save. */}
+      <ProductImages
+        images={imageList}
+        error={imagesError}
+        onError={setImagesError}
+        onUploaded={handleUploaded}
+        onRemove={handleRemoveImage}
+      />
     </form>
   )
 }

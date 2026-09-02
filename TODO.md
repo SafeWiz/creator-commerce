@@ -2,47 +2,33 @@
 
 ## Product images
 
-- **Images can't be added while creating a product.**
-  The `productImage` endpoint takes a `productId` and its middleware checks
-  ownership at presign time, so no upload can start before the row exists.
-  `ProductForm` therefore only renders `ProductImages` when `productId != null`,
-  which makes adding a new product with images a two-step flow: save first, then
-  reopen it to upload.
+- **No optimistic thumbnails while an image uploads.** The tile appears only
+  once `onClientUploadComplete` returns its url, so "did it work" is answered
+  when the upload finishes rather than when the file is picked. Rendering
+  `URL.createObjectURL(file)` at select time, with per-tile progress, would
+  answer it immediately.
 
-  Preferred fix — **lazy draft**: the first meaningful interaction on
-  `/products/new` (file select, or first field blur) calls a new
-  `createDraftProduct(ownerId)` action, which returns an id the uploads can
-  start against immediately. Save then updates that draft instead of inserting.
-  Nothing about the upload endpoint or its server callback changes, and Save
-  never blocks on uploads — the row already exists and images attach via
-  `onUploadComplete` as each file lands. Cost is abandoned drafts, which are
-  already invisible (`status: 'draft'`) and soft-deletable.
+- **Two upload paths still leak into UploadThing storage.**
+  Images no longer do: they stage in `product_image_uploads`, commit on Save,
+  and every provable death — dropped from the form, discarded, removed and
+  saved, or belonging to a deleted product — deletes the file.
+  `scripts/cleanup-orphaned-images.ts` sweeps the abandoned forms the app
+  cannot see. What is still unswept:
 
-  Alternative considered — a `pending_uploads` staging table keyed by
-  owner + batch, claimed at product create. Avoids orphan rows but needs a new
-  table, a claim step, a cleanup job, and careful handling of uploads that
-  finish after the claim. More moving parts for the same visible behaviour.
+  - **Abandoned product files.** `product_uploads` rows outlive their claim by
+    design, so age alone cannot identify an orphan there — the sweep would have
+    to check `products.file_key`. These are the expensive ones, up to 100MB
+    each, against 4MB for an image.
+  - **A deleted product's file.** Deliberate, not a bug: buyers hold a claim on
+    what they paid for, and `getDownloadableProductFile` serves it regardless of
+    the tombstone. It costs storage for as long as the row exists.
 
-  Rejected — having the client hold the `ufsUrl`s and submit them with the
-  form: simplest data model, but Save has to block until every upload resolves
-  or silently drop the stragglers.
-
-  Separately, and useful under any of the above: render optimistic thumbnails
-  from `URL.createObjectURL(file)` at select time with per-tile progress, so
-  "did it work" is answered when files are picked rather than when the upload
-  completes.
-
-- **Some uploaded files still leak into UploadThing storage.**
-  Removing an image from a product now deletes the underlying file
-  (`deleteUploadedFiles` in `lib/server/uploadthing.ts`), but two paths still
-  leave orphans: a soft-deleted product keeps all of its images in storage, and
-  a file whose append loses the `cardinality(images) + n <= MAX_PRODUCT_IMAGES`
-  race in `addProductImages` is already stored by the time the row rejects it.
-  Both want the same `deleteUploadedFiles` call — the first from
-  `deleteProductAction`, the second from the upload callback when the append
-  returns null. A soft-deleted product also keeps its product file, up to
-  100MB and — unlike an image — unreachable by anything except a signed url, so
-  it sits in storage for as long as the row exists to sign against.
+- **Two forms open on one product can delete a live image.** `setProductImages`
+  writes the whole array, last write wins. A saves `[X]` while B still holds the
+  stale `[X, Y]` and saves that; B's write lands last, and A's
+  `deleteUploadedFiles(['Y'])` destroys bytes the live row still references — a
+  broken thumbnail on the storefront. Needs an `updated_at` or version guard on
+  the update. Narrow in practice: one owner, two tabs, the same product.
 
 - **Product files uploaded before signed downloads are still `public-read`.**
   `acl` is a per-upload setting, so making `productFile` private only binds

@@ -48,3 +48,25 @@ until the next generate run silently drops it.
 
 Either way, SQL in `drizzle/` is generated too: `npm run schema:migrations:generate`
 after a schema change, then `npm run schema:migrations:run`.
+
+# Uploads
+
+Both kinds of upload are staged before they belong to anything, so a product
+being created can carry them.
+
+`product_uploads` holds the digital product file. Rows outlive the claim —
+`createProduct` copies the name and size onto the product and leaves the row as
+the record of what was uploaded.
+
+`product_image_uploads` holds images. Rows are deleted when claimed, so a
+surviving row means a pending upload and nothing else. `scripts/` sweeps the ones
+no form ever saved: `npm run cleanup:images` reports by default and needs `-- --delete`
+to act; only rows older than 24 hours are candidates, overridable with `-- --older-than=7d`.
+
+They are separate tables because images upload `public-read` and product files
+upload `private`. One table would let an image's key be claimed as a product's
+`fileKey`, and the product would sell a publicly fetchable file.
+
+Images commit on Save, on both the create and edit pages: the form owns the list
+and `setProductImages` writes it whole, having checked every url against the
+product's current images or a staging row of the same owner.

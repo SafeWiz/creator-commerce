@@ -1,6 +1,6 @@
 import 'server-only'
 
-import { and, asc, desc, eq, ilike, inArray, isNull, ne, or, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, ilike, inArray, isNull, ne, or } from 'drizzle-orm'
 
 import {
   EXPLORE_RESULT_LIMIT,
@@ -11,6 +11,7 @@ import { MAX_PRODUCT_IMAGES } from '@/lib/schemas/product'
 import db from '@/lib/server/db'
 import { user } from '@/lib/server/db/schemas/auth'
 import {
+  productImageUploadsTable,
   productUploadsTable,
   productsTable,
   type Product,
@@ -61,6 +62,24 @@ export async function recordProductUpload(input: {
     .insert(productUploadsTable)
     .values({ ...input, name: input.name.slice(0, 255) })
     .onConflictDoNothing({ target: productUploadsTable.key })
+}
+
+/**
+ * Records an image uploaded for a product that has not been saved yet.
+ *
+ * Written only by the productImage route's completion callback — the browser
+ * never names a url the server has not seen land. `onConflictDoNothing` covers a
+ * retried callback the same way `recordProductUpload` does.
+ */
+export async function recordProductImageUpload(input: {
+  ownerId: string
+  key: string
+  url: string
+}): Promise<void> {
+  await db
+    .insert(productImageUploadsTable)
+    .values(input)
+    .onConflictDoNothing({ target: productImageUploadsTable.key })
 }
 
 /**
@@ -133,40 +152,85 @@ export async function updateUserProduct({
   return product ?? null
 }
 
-// Appends in a single statement instead of read-modify-write: UploadThing fires
-// its completion callback once per file, so parallel uploads would otherwise
-// clobber each other. Owner-scoped; returns null when nothing matched.
-export async function addProductImages(
+/**
+ * Commits a product's image list.
+ *
+ * The whole array is written at once, because the form owns it: adds, removals
+ * and their order are one decision the user makes and one statement the database
+ * takes. `removed` is what the caller needs to delete from storage.
+ *
+ * The list comes from the browser, which is safe only because of the check
+ * below: a url is accepted when the product already holds it, or when it matches
+ * an upload row owned by this user. Anything else means the list is not one this
+ * user could have built, so nothing is written at all — a partial commit would
+ * be worse than a rejected one.
+ *
+ * The claimed rows are then deleted. They existed to say "uploaded, not yet on a
+ * product", and that is no longer true.
+ *
+ * Not a transaction. The failure it would prevent — the array written but the
+ * rows left behind — costs a sweep of rows whose urls are live, and the sweep
+ * checks for exactly that before deleting anything.
+ */
+export async function setProductImages(
   id: number,
   ownerId: string,
   urls: string[],
-): Promise<Product | null> {
-  if (urls.length === 0) return getUserProduct(id, ownerId)
+): Promise<{ product: Product; removed: string[] } | null> {
+  // The endpoint can no longer count images for a product it is not told about,
+  // so this is where the cap is enforced. Duplicates are rejected rather than
+  // collapsed: the form cannot produce them, so a list containing one is not a
+  // list this user built.
+  if (urls.length > MAX_PRODUCT_IMAGES) return null
+  if (new Set(urls).size !== urls.length) return null
 
-  const [product] = await db
+  const product = await getUserProduct(id, ownerId)
+  if (!product) return null
+
+  const committed = new Set(product.images)
+  const claimable = urls.filter((url) => !committed.has(url))
+
+  const staged = claimable.length
+    ? await db
+        .select({ id: productImageUploadsTable.id })
+        .from(productImageUploadsTable)
+        .where(
+          and(
+            eq(productImageUploadsTable.ownerId, ownerId),
+            inArray(productImageUploadsTable.url, claimable),
+          ),
+        )
+    : []
+
+  // Every url was either already on the product or is an upload of this user's.
+  // A count mismatch means one was neither.
+  if (staged.length !== claimable.length) return null
+
+  const [updated] = await db
     .update(productsTable)
-    .set({
-      // Each url is bound as its own parameter, so no array-literal encoding
-      // and nothing user-supplied reaches the query text.
-      images: sql`${productsTable.images} || ARRAY[${sql.join(
-        urls.map((url) => sql`${url}`),
-        sql`, `,
-      )}]::text[]`,
-    })
+    .set({ images: urls })
     .where(
       and(
         eq(productsTable.id, id),
         eq(productsTable.ownerId, ownerId),
         isNull(productsTable.deletedAt),
-        // The endpoint's middleware checks the cap too, but that check isn't
-        // atomic: two batches submitted at once can both pass it. This makes
-        // the database the real ceiling.
-        sql`cardinality(${productsTable.images}) + ${urls.length} <= ${MAX_PRODUCT_IMAGES}`,
       ),
     )
     .returning()
 
-  return product ?? null
+  if (!updated) return null
+
+  if (staged.length > 0) {
+    await db.delete(productImageUploadsTable).where(
+      inArray(
+        productImageUploadsTable.id,
+        staged.map((row) => row.id),
+      ),
+    )
+  }
+
+  const next = new Set(urls)
+  return { product: updated, removed: product.images.filter((url) => !next.has(url)) }
 }
 
 export async function getUserProducts(ownerId: string): Promise<Product[]> {
@@ -178,13 +242,33 @@ export async function getUserProducts(ownerId: string): Promise<Product[]> {
     )
 }
 
-// Owner-scoped soft delete: sets the tombstone instead of removing the row, so
-// the product is hidden from reads but recoverable. Returns false when nothing
-// matched (wrong owner, non-existent id, or already deleted).
+/**
+ * Owner-scoped soft delete: sets the tombstone instead of removing the row, so
+ * purchases and downloads keep resolving. Returns null when nothing matched
+ * (wrong owner, non-existent id, or already deleted).
+ *
+ * The images are handed back so the caller can delete the files. The tombstone
+ * exists for the buyer's sake — no buyer surface renders product images, so
+ * keeping them would only be storage nobody can ever reach. The product's file
+ * is deliberately left alone: buyers hold a claim on what they paid for.
+ *
+ * Two statements, in this order, because the tombstone is what makes the read
+ * safe. RETURNING yields post-update values, and this first statement does not
+ * touch `images` — so it reports the list as it stood, atomically. Every writer
+ * of that column requires `deleted_at is null`, so once this returns, nothing
+ * can add an image to this product again. Reading first and clearing second
+ * would leave a window where a concurrent save's url is wiped by a stale list
+ * and its staging row is already claimed, leaving a file nothing references and
+ * no sweep can find.
+ *
+ * A failure between the two leaves a deleted product still holding its urls.
+ * That costs storage and breaks nothing — the images stay referenced, so the
+ * sweep leaves them alone too.
+ */
 export async function deleteUserProduct(
   id: number,
   ownerId: string,
-): Promise<boolean> {
+): Promise<{ images: string[] } | null> {
   const [deleted] = await db
     .update(productsTable)
     .set({ deletedAt: new Date() })
@@ -195,35 +279,47 @@ export async function deleteUserProduct(
         isNull(productsTable.deletedAt),
       ),
     )
-    .returning({ id: productsTable.id })
+    .returning({ images: productsTable.images })
 
-  return deleted != null
+  if (!deleted) return null
+
+  // Owner and tombstone are already proven by the statement above; the id is
+  // all this needs.
+  await db
+    .update(productsTable)
+    .set({ images: [] })
+    .where(eq(productsTable.id, id))
+
+  return { images: deleted.images }
 }
 
-// Owner-scoped image removal. The `@>` guard means the update only matches when
-// this product actually holds the url, so the caller can treat a null result as
-// "not yours / not there" and know a non-null one means the file was really
-// detached from this product — which is what makes it safe to then delete the
-// underlying file from storage.
-export async function removeProductImage(
-  id: number,
+/**
+ * Drops uploads that were never committed to a product.
+ *
+ * Owner-scoped, and it only ever matches staging rows — a url that reached a
+ * product has no row left, so this can never detach a live image. That is what
+ * makes the returned keys safe to delete from storage.
+ *
+ * Returns the keys of the rows it actually deleted, so a url that was already
+ * claimed, or was never this user's, simply contributes nothing.
+ */
+export async function discardStagedImages(
   ownerId: string,
-  url: string,
-): Promise<Product | null> {
-  const [product] = await db
-    .update(productsTable)
-    .set({ images: sql`array_remove(${productsTable.images}, ${url})` })
+  urls: string[],
+): Promise<string[]> {
+  if (urls.length === 0) return []
+
+  const rows = await db
+    .delete(productImageUploadsTable)
     .where(
       and(
-        eq(productsTable.id, id),
-        eq(productsTable.ownerId, ownerId),
-        isNull(productsTable.deletedAt),
-        sql`${productsTable.images} @> ARRAY[${url}]::text[]`,
+        eq(productImageUploadsTable.ownerId, ownerId),
+        inArray(productImageUploadsTable.url, urls),
       ),
     )
-    .returning()
+    .returning({ key: productImageUploadsTable.key })
 
-  return product ?? null
+  return rows.map((row) => row.key)
 }
 
 // Only what the storefront grid's ProductCard renders (see ProductCardProduct
