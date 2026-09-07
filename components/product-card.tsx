@@ -3,6 +3,7 @@ import Link from "next/link"
 import { AddToCartButton } from "@/components/add-to-cart-button"
 import { Image } from "@/components/image"
 import { ProductImagePlaceholder } from "@/components/product-image-placeholder"
+import { Badge } from "@/components/ui/badge"
 import { formatPrice } from "@/lib/currency"
 import { cn } from "@/lib/utils"
 
@@ -44,6 +45,17 @@ export function ProductCover({
   )
 }
 
+// Shared by the storefront card and the product page: the same "Draft" badge,
+// positioned differently by each caller via `className`.
+export function DraftBadge({ className }: { className?: string }) {
+  return (
+    <Badge variant="secondary" className={className}>
+      <span className="size-1.5 rounded-full bg-muted-foreground" />
+      Draft
+    </Badge>
+  )
+}
+
 // Only what the card actually renders, rather than the full product row — so
 // screens without live data yet (the wishlist placeholder) can still use it.
 export type ProductCardProduct = {
@@ -60,6 +72,7 @@ export function ProductCard({
   handle,
   preload,
   inCart,
+  draft,
 }: {
   product: ProductCardProduct
   // Seller handle without the leading "@"; the link adds it back.
@@ -69,6 +82,10 @@ export function ProductCard({
   // Undefined means the caller has no cart context (a placeholder screen), and
   // the card renders without a cart button at all.
   inCart?: boolean
+  // Only the owner's view of their own storefront sets this. A draft has no
+  // cart path — getCartProducts filters to published, so the id would be
+  // silently dropped — so the card offers the edit page instead.
+  draft?: boolean
 }) {
   return (
     // Not a <Link> root, because the cart button would then be a <button> inside
@@ -76,11 +93,14 @@ export function ProductCard({
     // stretched overlay and the button is its sibling, lifted above it with
     // z-10. No stopPropagation needed: they never nest.
     <div className="relative flex flex-col overflow-hidden rounded-xl bg-card ring-1 ring-foreground/10 transition-shadow hover:ring-foreground/15">
-      <ProductCover
-        images={product.images}
-        alt={product.name}
-        preload={preload}
-      />
+      <div className="relative">
+        <ProductCover
+          images={product.images}
+          alt={product.name}
+          preload={preload}
+        />
+        {draft && <DraftBadge className="absolute top-2.5 left-2.5 shadow-sm" />}
+      </div>
       <div className="flex flex-1 flex-col gap-1.5 p-4">
         <span className="font-heading text-[15px] font-medium">
           {product.name}
@@ -94,14 +114,26 @@ export function ProductCard({
           <span className="font-mono text-base font-medium">
             {formatPrice(product.priceInCents)}
           </span>
-          {inCart !== undefined && (
-            <AddToCartButton
-              productId={product.id}
-              productName={product.name}
-              inCart={inCart}
-              size="icon-sm"
-              className="relative z-10"
-            />
+          {draft ? (
+            // Sibling of the stretched anchor, lifted above it the same way the
+            // cart button is, so the two links never nest.
+            <Link
+              href={`/products/${product.id}`}
+              aria-label={`Edit ${product.name}`}
+              className="relative z-10 text-[13px] font-medium underline underline-offset-4 hover:text-muted-foreground"
+            >
+              Edit
+            </Link>
+          ) : (
+            inCart !== undefined && (
+              <AddToCartButton
+                productId={product.id}
+                productName={product.name}
+                inCart={inCart}
+                size="icon-sm"
+                className="relative z-10"
+              />
+            )
           )}
         </div>
       </div>

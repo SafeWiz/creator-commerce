@@ -89,6 +89,14 @@ product is not a draft and is never previewable.
 Both selections gain `status`, and it is added to `StorefrontProduct` and
 `StorefrontProductDetail`. That is what the UI marks drafts from.
 
+`getStorefrontProducts` also gains an explicit `.orderBy(asc(createdAt), asc(id))`.
+The owner's read and a visitor's read now have different WHERE clauses —
+`includeDrafts` changes what the status term excludes — so without an explicit
+order the two queries are free to come back in different orders, and the
+owner's preview would stop matching the shelf a buyer sees. `id` breaks ties
+`createdAt` leaves unordered. `getStorefrontProduct` returns a single row by
+id, so it needs no such change.
+
 `searchPublishedProducts` and `getCartProducts` are untouched: they carry their
 own `status = 'published'` term, so explore and the cart cannot surface a draft
 regardless of who is asking.
@@ -101,11 +109,15 @@ const isOwner = viewer?.id === user.id
 const products = await getStorefrontProducts(user.id, { includeDrafts: isOwner })
 ```
 
-`getUser()` is `cache()`-wrapped, so this costs no extra session round-trip.
+`getUser()` is `cache()`-wrapped, so repeated calls within one render pass are
+free. Neither route resolved a session before this change, though, so this does
+add one session read per request to both — the cache only avoids a *second* one
+within the same pass.
 
-Drafts are not sorted or grouped separately — the read adds no ordering, so they
-appear among the published products as the query returns them. When the viewer is
-the owner
+Drafts are not sorted or grouped separately: the read is explicitly ordered by
+`createdAt, id` (see the DAL section below), the same order a visitor's read
+returns, so a draft simply appears wherever the grid would place it once
+published rather than in a section of its own. When the viewer is the owner
 and at least one draft is present, the subtitle under the heading gains a
 `n drafts, only visible to you` clause. The empty state splits: an owner with
 nothing at all is pointed at `/products/new` rather than told to check back soon.
@@ -152,8 +164,9 @@ cached storefront output to invalidate when a product's status changes.
 
 ## Verification
 
-The repo has no test framework. Verification is `npm run lint`, `npm run build`,
-and a manual pass:
+The repo has no test framework. `npm run build` does not work in this sandbox
+(it hits a blocked Google Fonts fetch), so it is out. Verification is
+`npx tsc --noEmit`, `npm run lint`, and a manual pass:
 
 1. Signed in as the seller, `/@handle` shows drafts with badges and the subtitle
    count; a draft card's `Edit` link opens the product editor.

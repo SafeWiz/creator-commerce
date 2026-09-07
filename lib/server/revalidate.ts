@@ -10,11 +10,16 @@ import { revalidatePath } from 'next/cache'
  *
  * These pages used to read no request state, so Next prerendered them and this
  * was what stopped a stale product list or gallery being served after an edit.
- * The cart badge in the storefront header reads cookies(), which — without
- * cacheComponents, where dynamism is a property of the whole route render —
- * takes both routes out of the Full Route Cache. So server-side this currently
- * invalidates nothing. It still expires the client Router Cache, and it becomes
- * load-bearing again the moment those pages can be cached, so the calls stay.
+ * That is no longer true: both routes now call getUser() directly to decide
+ * whether the viewer is the owner, and the render varies by viewer — the owner
+ * sees their own drafts, everyone else doesn't. Reading the session takes both
+ * routes out of the Full Route Cache, same as the cart badge's cookies() read
+ * did before, so server-side this still invalidates nothing; it only expires
+ * the client Router Cache. The routes must stay dynamic on their own terms —
+ * a Full Route Cache entry produced during the owner's request would serve
+ * their drafts to every visitor, and revalidatePath is not sufficient
+ * isolation for a personalized render, so the calls stay for the Router Cache
+ * but must never be read as what keeps this safe.
  */
 export function revalidateStorefront() {
   revalidatePath('/(public)/[handle]', 'page')

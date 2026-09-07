@@ -1,9 +1,11 @@
 import type { Metadata } from "next"
 import { notFound } from "next/navigation"
+import Link from "next/link"
 
 import { readCartMembership } from "@/lib/server/cart"
-import { getPublishedProducts } from "@/lib/server/dal/products"
+import { getStorefrontProducts } from "@/lib/server/dal/products"
 import { getUserByHandle } from "@/lib/server/dal/users"
+import { getUser } from "@/lib/server/session"
 import { ProductCard } from "@/components/product-card"
 import { parseHandleSegment } from "@/lib/utils"
 
@@ -31,8 +33,19 @@ export default async function StorefrontPage({
     notFound()
   }
 
-  const products = await getPublishedProducts(user.id)
+  // getUser rather than requireUser: this page is public, and a signed-out
+  // visitor must still get the published grid.
+  const viewer = await getUser()
+  const isOwner = viewer?.id === user.id
+
+  const products = await getStorefrontProducts(user.id, {
+    includeDrafts: isOwner,
+  })
   const inCart = await readCartMembership()
+
+  const draftCount = products.filter(
+    (product) => product.status === "draft",
+  ).length
 
   return (
     <div className="mx-auto max-w-[1080px] px-6 pt-8 pb-16">
@@ -42,12 +55,24 @@ export default async function StorefrontPage({
         </h1>
         <p className="mt-1.5 max-w-[60ch] text-[15px] text-muted-foreground">
           Instant download after checkout.
+          {draftCount > 0 &&
+            ` · ${draftCount} ${draftCount === 1 ? "draft" : "drafts"}, only visible to you.`}
         </p>
       </div>
       {products.length === 0 ? (
-        <p className="text-[15px] text-muted-foreground">
-          Nothing published yet — check back soon.
-        </p>
+        isOwner ? (
+          <p className="text-[15px] text-muted-foreground">
+            No products yet.{" "}
+            <Link href="/products/new" className="text-foreground underline">
+              Create your first one
+            </Link>
+            .
+          </p>
+        ) : (
+          <p className="text-[15px] text-muted-foreground">
+            Nothing published yet — check back soon.
+          </p>
+        )
       ) : (
         <div className="grid grid-cols-3 gap-5">
           {products.map((product, index) => (
@@ -56,6 +81,7 @@ export default async function StorefrontPage({
               product={product}
               handle={user.handle}
               inCart={inCart(product.id)}
+              draft={product.status === "draft"}
               // The grid starts at the top of the page, so the first cover is
               // the LCP candidate.
               preload={index === 0}

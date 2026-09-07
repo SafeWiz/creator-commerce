@@ -12,8 +12,9 @@
 
 - Spec: `docs/superpowers/specs/2026-09-07-storefront-draft-preview-design.md`. Read it before starting.
 - **Read the Next.js docs before writing page code.** This repo pins Next 16, whose APIs differ from older releases: `node_modules/next/dist/docs/`. `params` is a Promise; `PageProps<"/route">` and `LayoutProps<"/route">` are globals.
-- **The repo has no test framework.** There is no `npm test`. Verification is `npm run lint`, `npm run build`, and the manual passes written into each task.
-- **Gabi runs all npm commands himself.** Never run `npm run lint`, `npm run build`, `npm install`, or any drizzle script. When a step says to verify, stop and ask him to run it, then wait for the output.
+- **The repo has no test framework.** There is no `npm test`. Verification is `npx tsc --noEmit`, `npm run lint`, and the manual browser passes written into each task.
+- **You may run `npx tsc --noEmit` and `npm run lint`, and nothing else.** Both are read-only and are the type/lint gate for every task. `npm run build` does not work in this sandbox (it fetches Google Fonts, which is blocked) — never run it. `npm install`, `npm run dev` and every drizzle script belong to Gabi: stop, ask, and wait for his output.
+- **Browser checks belong to Gabi.** Where a task lists a manual pass, report the steps in your task report rather than attempting them.
 - **DAL modules never read request state.** No `headers()`, no cookies, no `redirect()` inside `lib/server/dal/*`. Ownership is a parameter the caller passes in. Session resolution lives in `lib/server/session.ts`.
 - Every module under `lib/server/` starts with `import 'server-only'` — the files touched here already do; don't remove it.
 - Documentation and code comments in English only.
@@ -199,9 +200,15 @@ grep -rn "getPublishedProduct" app components lib
 
 Expected: no output. `searchPublishedProducts` is a different name and does not match this pattern — it stays exactly as it is.
 
-- [ ] **Step 6: Ask Gabi to verify**
+- [ ] **Step 6: Typecheck and lint**
 
-Ask him to run `npm run lint` and `npm run build`. Expected: both pass. Do not run them yourself. Wait for his output before continuing.
+Run:
+
+```bash
+npx tsc --noEmit && npm run lint
+```
+
+Expected: both clean, no output beyond lint's summary.
 
 Behavior is unchanged at this point: both call sites pass `false`, so drafts stay invisible everywhere.
 
@@ -319,9 +326,15 @@ Replace the action row — the `<div className="mt-1 flex items-center justify-b
         </div>
 ```
 
-- [ ] **Step 5: Ask Gabi to verify**
+- [ ] **Step 5: Typecheck and lint**
 
-Ask him to run `npm run lint` and `npm run build`. Expected: both pass. No caller passes `draft` yet, so `/@handle`, `/explore` and `/cart` must look exactly as before.
+Run:
+
+```bash
+npx tsc --noEmit && npm run lint
+```
+
+Expected: both clean. No caller passes `draft` yet, so `/@handle`, `/explore` and `/cart` still render exactly as before — note that in your report as a browser check for Gabi.
 
 - [ ] **Step 6: Commit**
 
@@ -435,15 +448,19 @@ The empty state now links to the editor. Add to the imports:
 import Link from "next/link"
 ```
 
-- [ ] **Step 6: Ask Gabi to verify**
+- [ ] **Step 6: Typecheck, lint, and write down the browser pass**
 
-Ask him to run `npm run lint` and `npm run build`, then check in the browser:
+Run:
+
+```bash
+npx tsc --noEmit && npm run lint
+```
+
+Expected: both clean. Then record these steps in your report for Gabi to run — do not attempt them yourself:
 
 1. Signed in as a seller with at least one draft, open `/@<his-handle>`: drafts appear in the grid with a `Draft` badge and an `Edit` link; the subtitle reads `Instant download after checkout. · N drafts, only visible to you.`
 2. The `Edit` link opens `/products/<id>`.
 3. Sign out (or use another account) and reload `/@<his-handle>`: no drafts, no subtitle clause, cart buttons as before.
-
-Wait for his result before continuing.
 
 - [ ] **Step 7: Commit**
 
@@ -600,9 +617,15 @@ Replace the `<div className="flex gap-2.5">` block — the one holding `AddToCar
 
 Everything below — the Stripe reassurance line, the separator, the "What's inside" list — is left in place for a draft, because the point of the preview is to see the buyer's page.
 
-- [ ] **Step 7: Ask Gabi to verify**
+- [ ] **Step 7: Typecheck, lint, and write down the browser pass**
 
-Ask him to run `npm run lint` and `npm run build`, then check in the browser:
+Run:
+
+```bash
+npx tsc --noEmit && npm run lint
+```
+
+Expected: both clean. Then record these steps in your report for Gabi to run — do not attempt them yourself:
 
 1. Signed in as the seller, click a draft's `Edit`-badged card through to `/@<handle>/<id>/<slug>` — reachable, `Draft` badge beside the title, `Only visible to you.`, and an `Edit product` button where add-to-cart normally sits.
 2. View source or devtools on that draft page: `<meta name="robots" content="noindex">` is present. A published product page has no such tag.
@@ -610,7 +633,7 @@ Ask him to run `npm run lint` and `npm run build`, then check in the browser:
 4. A published product page is unchanged — add-to-cart, heart, "View cart" after adding.
 5. `/explore` and `/cart` show no drafts.
 
-Wait for his result.
+Gabi runs these; they are not yours to attempt.
 
 - [ ] **Step 8: Commit**
 
@@ -626,4 +649,4 @@ git commit -m "feat: preview own draft at its product url"
 - A seller sees their drafts on `/@handle`, badged, with an edit link, and a subtitle counting them.
 - A seller can open a draft's real product URL and see the buyer's page, badged, with an edit button.
 - Nobody else sees a draft in the grid, at its URL, on `/explore`, or in a cart.
-- `npm run lint` and `npm run build` pass.
+- `npx tsc --noEmit` and `npm run lint` are clean, and Gabi's browser pass and `npm run build` confirm it.

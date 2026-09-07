@@ -71,8 +71,8 @@ Creator-branded public shell: creator name/avatar header, minimal chrome. Buyer-
 
 | Route | Page | Archetype | Key features | Sessions |
 |---|---|---|---|---|
-| `/@handle` | Creator storefront | Grid | Grid of the creator's **Published** products, SEO metadata, 404 for unknown handles | S13 |
-| `/@handle/{slug}` | Public product page | Detail | Cover image, AI-generated description, `<ProductTeaser>` per file type, **Buy** button (Stripe Checkout), save to wishlist, SEO metadata; Published products only | S9, S13, S14 |
+| `/@handle` | Creator storefront | Grid | Grid of the creator's **Published** products, SEO metadata, 404 for unknown handles. The owner, and only the owner, also sees their own **Draft** products in this grid, marked with a badge | S13 |
+| `/@handle/{id}/{slug}` | Public product page | Detail | Cover image, AI-generated description, `<ProductTeaser>` per file type, **Buy** button (Stripe Checkout), save to wishlist, SEO metadata; Published products only, except that the owner can reach and preview their own Draft at this same URL | S9, S13, S14 |
 
 `/cart` is public too, but has its own shell (`components/layouts/cart-shell.tsx`) rather than the storefront's, since a cart spans sellers.
 
