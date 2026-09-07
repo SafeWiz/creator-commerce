@@ -183,11 +183,31 @@ ordered by `createdAt`, top 50, no pagination. Three known limits:
 
 ## Purchases
 
-- **Dashboard KPIs are still mock.** Revenue, Units sold and Products could all
-  be derived now (`getSellerTotals` already computes the first two), but
-  Conversion has no data source anywhere — there is no pageview or analytics
-  table. Deriving three of four and leaving one fabricated would be worse than
-  the current honest placeholder, so this waits on a decision about Conversion.
+- **Dashboard KPIs are still mock.** Revenue, Units sold and Products can all be
+  derived now (`getSellerTotals` already computes the first two); Conversion
+  cannot, because there is no pageview or analytics table anywhere.
+
+  The decision that was waiting: derive what is derivable and render the rest as
+  an **honest empty state** rather than deleting the block or faking it. A
+  deleted card says nothing to the user or to the next developer; a fabricated
+  number is worse than both. Same rule for the onboarding checklist, where two of
+  five items ("Connect Stripe" — Connect does not exist; "Share your storefront
+  link" — nothing tracks it) are unknowable. That makes the checklist a
+  three-state control, not a two-state one: done, not done, unknown. An unchecked
+  box is a claim about the user, and where the truth is "we cannot know" that
+  claim is false.
+
+  When Conversion comes back it comes from third-party analytics (Plausible,
+  PostHog, Vercel Analytics), not a home-grown pageview table. Counting views
+  correctly means handling bots, cached responses and a write per render; those
+  products have solved all three and we would ship a worse version of a number
+  whose whole value is being trustworthy.
+
+  Also mock on that page: the greeting is hardcoded to "Gabi" for every user, and
+  the KPI cards are labelled "last 30 days" while the numbers behind them are
+  not windowed. The label is part of the claim — either query the window
+  (one 60-day scan with `filter (where ...)` gives both the window and the
+  previous one for the delta) or change the label to match.
 
 - **No receipts.** The `/purchases` receipt column was removed rather than left
   as a dead link. It comes back with Stripe, which is what would generate them.
@@ -234,6 +254,42 @@ ordered by `createdAt`, top 50, no pagination. Three known limits:
   webhook would then find nothing to promote, turning a refundable duplicate into
   a payment with no record at all.
 
+
+## Notifications
+
+- **Receipt delivery is fire-and-forget.** `fulfillCheckoutSession` sends the
+  buyer's receipt inside a `try/catch` that swallows the error, and that is
+  deliberate: a thrown send becomes a 500, Stripe retries the webhook in good
+  faith, and the retry's `markCheckoutSessionPaid` matches no pending rows and
+  returns `[]`. So the order stays correct and the receipt is gone permanently,
+  with one `console.error` to show for it. Swallowing is the same trade already
+  made for `deleteUploadedFiles` — the operation the user cares about succeeded,
+  and failing it because a side effect failed would be worse.
+
+  The real fix is an outbox table with retries, which also answers the second
+  problem on that path: Gmail's SMTP handshake costs 1-3s inside a webhook Stripe
+  is timing. Both reasons point at the same table, so it is one piece of work,
+  not two.
+
+- **Seller notification is unwritten.** One order can span several sellers, so it
+  is a `groupBy` on `sellerId` with one email each — each seller seeing only
+  their own lines. A single broadcast would leak one seller's products to
+  another, which is a privacy bug and not a formatting one. The rows in
+  `promoted` already carry `sellerId`; the address comes from a join on `user`,
+  the way `getSellerSales` already reads `buyerEmail`. Per-email `try/catch`, so
+  one bad address cannot take down the rest of the order.
+
+- **`from` is a personal Gmail address, signed with Google's DKIM.** Sending goes
+  through nodemailer with a Gmail App Password (`SMTP_USER` / `SMTP_PASS`), which
+  is free, delivers to any address and caps around 500/day. What it costs is
+  provenance: the mail is from a person, not from the product. A domain with its
+  own DKIM is what replaces it, and the swap is one file because every caller
+  goes through `sendEmail`.
+
+- **`requireEmailVerification` stays off.** `emailVerification.sendVerificationEmail`
+  and `sendOnSignUp` are wired, but every existing account has
+  `emailVerified: false`, so enforcing verification at sign-in locks out all of
+  them. Needs a backfill or a grandfather date before it can be turned on.
 
 ## UX debt
 - Currently buying and selling are kind of a hodge podge in the dashboard layout / sidebar nav. We probably want to have buying and selling as major pieces in the UI so that users that only do one and not the other can have a more tailored experience with dedicated dashboards for each.
