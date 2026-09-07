@@ -67,7 +67,10 @@ over one nodemailer transporter picked at module load by
 
 - `SMTP_USER` — the Gmail address.
 - `SMTP_PASS` — a Google **App Password**; 2FA must be on for the account.
-- `EMAIL_FROM` — optional, defaults to `SMTP_USER`.
+- `EMAIL_FROM` — optional, defaults to `SMTP_USER`; Gmail rewrites `From` to the
+  authenticated `SMTP_USER` account unless the address given is a verified
+  alias on that account, so setting a domain address without adding it as an
+  alias fails silently rather than erroring.
 
 Both credentials absent is a supported state, not a broken one: the transporter
 becomes nodemailer's `jsonTransport`, which builds the message without opening a

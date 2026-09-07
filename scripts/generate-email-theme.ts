@@ -26,10 +26,12 @@ const ROOT_FONT_SIZE_PX = 16
  * OKLCH to sRGB hex, via OKLab and the LMS matrices from Björn Ottosson's
  * reference implementation.
  *
- * Out-of-gamut channels are clamped per channel. The current palette sits well
- * inside sRGB, so this is a guard rather than a routine path — but a token
- * edited to a vivid colour must still produce a valid hex string rather than
- * "NaN".
+ * Out-of-gamut channels are clamped per channel, and this is a live path, not a
+ * theoretical one: --primary, --sidebar-primary, and --destructive all land
+ * outside sRGB on one channel and get clamped today, the brand green among
+ * them. The visual error is under one 8-bit step, so the clamped hexes are
+ * still correct — but a future token edited to something more vivid must still
+ * produce a valid hex string rather than "NaN", which is what this guards.
  */
 function oklchToHex(lightness: number, chroma: number, hueDegrees: number): string {
   const hue = (hueDegrees * Math.PI) / 180

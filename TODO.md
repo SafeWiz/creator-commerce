@@ -254,6 +254,14 @@ ordered by `createdAt`, top 50, no pagination. Three known limits:
   webhook would then find nothing to promote, turning a refundable duplicate into
   a payment with no record at all.
 
+  The receipt is downstream of this and inherits both failure modes. The
+  unique-violation branch in `fulfillCheckoutSession` returns `[]` before any
+  receipt is sent, so a buyer charged for a duplicate gets no receipt at all —
+  on top of needing the manual refund. And because `markCheckoutSessionPaid` can
+  promote a subset of a session's rows, a receipt that does go out can list
+  fewer items and a smaller total than the buyer was actually charged. Whoever
+  fixes double-pay needs to carry the receipt fix along with it.
+
 
 ## Notifications
 
@@ -271,6 +279,13 @@ ordered by `createdAt`, top 50, no pagination. Three known limits:
   is timing. Both reasons point at the same table, so it is one piece of work,
   not two.
 
+- **Every `@react-email/*` package is marked deprecated in the lockfile.**
+  `npm ls` shows `"deprecated": "Package no longer supported."` on all of them,
+  `@react-email/components@1.0.12` included. It still works today, and this
+  reads as a registry-wide deprecation across the scope rather than a broken
+  package, but nobody has established what replaces it. Someone should, before
+  the templates grow enough to make a migration expensive.
+
 - **Seller notification is unwritten.** One order can span several sellers, so it
   is a `groupBy` on `sellerId` with one email each — each seller seeing only
   their own lines. A single broadcast would leak one seller's products to
@@ -286,10 +301,13 @@ ordered by `createdAt`, top 50, no pagination. Three known limits:
   own DKIM is what replaces it, and the swap is one file because every caller
   goes through `sendEmail`.
 
-- **`requireEmailVerification` stays off.** `emailVerification.sendVerificationEmail`
-  and `sendOnSignUp` are wired, but every existing account has
-  `emailVerified: false`, so enforcing verification at sign-in locks out all of
-  them. Needs a backfill or a grandfather date before it can be turned on.
+- **`requireEmailVerification` stays off.** Nothing is wired yet —
+  `lib/server/auth.ts` has no `emailVerification` config at all, so there is no
+  `sendVerificationEmail` and no `sendOnSignUp`. The reason it has not been
+  turned on still stands, though: every existing account has
+  `emailVerified: false`, so enforcing verification at sign-in would lock out
+  all of them. Needs a backfill or a grandfather date before it can be turned
+  on, on top of the wiring itself.
 
 ## UX debt
 - Currently buying and selling are kind of a hodge podge in the dashboard layout / sidebar nav. We probably want to have buying and selling as major pieces in the UI so that users that only do one and not the other can have a more tailored experience with dedicated dashboards for each.
