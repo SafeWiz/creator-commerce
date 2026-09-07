@@ -327,6 +327,69 @@ export async function getSellerPeriodTotals(
   }
 }
 
+export type TopProduct = {
+  productId: number
+  name: string
+  revenueInCents: number
+}
+
+/**
+ * The seller's best-earning products, highest first. `since` omitted means all
+ * time.
+ *
+ * Two things here contradict the rest of this module on purpose.
+ *
+ * The name comes from the joined product, not from purchases.productName.
+ * Everywhere else the snapshot is the correct read — a seller editing a product
+ * must not rewrite what a buyer's history says they bought. This is the seller's
+ * own catalogue, where the opposite holds: they think in terms of the product
+ * they own, and grouping by snapshot would split one renamed product into two
+ * rows that are really the same thing.
+ *
+ * The join does not filter deletedAt. A retired product still earned that
+ * revenue, and hiding it would silently understate the ranking — the same
+ * reasoning getBuyerPurchases gives.
+ *
+ * The join is inner and provably safe: purchases.productId is
+ * onDelete: 'restrict', so the product cannot vanish under a purchase.
+ *
+ * No total is returned. Callers already hold one — the windowed card uses
+ * getSellerPeriodTotals().current.revenueInCents, the all-time card uses
+ * getSellerTotals().revenueInCents — and a total summed from the returned rows
+ * would make the top product 100% of itself.
+ */
+export async function getSellerTopProducts(
+  sellerId: string,
+  options: { since?: Date; limit: number },
+): Promise<TopProduct[]> {
+  // One expression, used as both the projection and the sort key, so the two
+  // cannot drift apart.
+  const revenueInCents = sum(purchasesTable.priceInCents).mapWith(Number)
+
+  return db
+    .select({
+      productId: productsTable.id,
+      name: productsTable.name,
+      revenueInCents,
+    })
+    .from(purchasesTable)
+    .innerJoin(productsTable, eq(productsTable.id, purchasesTable.productId))
+    .where(
+      // and() drops undefined, so an absent `since` simply widens this to all
+      // time rather than needing a second query shape.
+      and(
+        eq(purchasesTable.sellerId, sellerId),
+        eq(purchasesTable.status, 'paid'),
+        options.since
+          ? gte(purchasesTable.createdAt, options.since)
+          : undefined,
+      ),
+    )
+    .groupBy(productsTable.id, productsTable.name)
+    .orderBy(desc(revenueInCents))
+    .limit(options.limit)
+}
+
 /**
  * Which products this user already owns.
  *

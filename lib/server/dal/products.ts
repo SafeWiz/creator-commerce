@@ -1,6 +1,6 @@
 import 'server-only'
 
-import { and, asc, desc, eq, ilike, inArray, isNull, ne, or } from 'drizzle-orm'
+import { and, asc, desc, eq, ilike, inArray, isNull, ne, or, sql } from 'drizzle-orm'
 
 import {
   EXPLORE_RESULT_LIMIT,
@@ -613,4 +613,41 @@ export async function getUserProduct(
     .limit(1)
 
   return product ?? null
+}
+
+export type SellerProductCounts = {
+  published: number
+  drafts: number
+}
+
+/**
+ * How many products the owner has live, and how many are still drafts.
+ *
+ * The two counts do not overlap — `status` is one or the other — so the
+ * dashboard can print the published figure as the headline and the drafts as a
+ * separate line without either double-counting the other.
+ *
+ * Soft-deleted rows are excluded, the same as every other read of this table.
+ * One scan of products_ownerId_idx rather than two count queries.
+ */
+export async function getSellerProductCounts(
+  ownerId: string,
+): Promise<SellerProductCounts> {
+  const [row] = await db
+    .select({
+      published:
+        sql<number>`count(*) filter (where ${eq(productsTable.status, 'published')})`.mapWith(
+          Number,
+        ),
+      drafts:
+        sql<number>`count(*) filter (where ${eq(productsTable.status, 'draft')})`.mapWith(
+          Number,
+        ),
+    })
+    .from(productsTable)
+    .where(
+      and(eq(productsTable.ownerId, ownerId), isNull(productsTable.deletedAt)),
+    )
+
+  return { published: row?.published ?? 0, drafts: row?.drafts ?? 0 }
 }
