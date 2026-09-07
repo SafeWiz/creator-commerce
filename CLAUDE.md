@@ -61,6 +61,24 @@ literal hex. Edit the palette in `app/globals.css`, then regenerate.
 Only the light tokens are read. An email has no theme toggle, and Gmail applies
 its own dark-mode inversion regardless.
 
+Sending goes through one choke point, `sendEmail` in `lib/server/email/send.ts`,
+over one nodemailer transporter picked at module load by
+`lib/server/email/transport.ts`:
+
+- `SMTP_USER` — the Gmail address.
+- `SMTP_PASS` — a Google **App Password**; 2FA must be on for the account.
+- `EMAIL_FROM` — optional, defaults to `SMTP_USER`.
+
+Both credentials absent is a supported state, not a broken one: the transporter
+becomes nodemailer's `jsonTransport`, which builds the message without opening a
+socket, and `sendEmail` logs the headers and the plain-text body. So a fresh
+clone can exercise the whole path, and no dev machine sends real mail by
+accident.
+
+Templates are viewed at `/dev/emails/<template>`, which 404s in production.
+`?send=<address>` on the same url sends that template's fixture through
+`sendEmail`.
+
 # Uploads
 
 Both kinds of upload are staged before they belong to anything, so a product

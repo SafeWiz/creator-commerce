@@ -1,7 +1,8 @@
 import { render } from '@react-email/components'
 import type { NextRequest } from 'next/server'
 
-import { ReceiptEmail, type ReceiptEmailProps } from '@/components/email/receipt'
+import { ReceiptEmail, receiptSubject, type ReceiptEmailProps } from '@/components/email/receipt'
+import { sendEmail } from '@/lib/server/email/send'
 
 /**
  * Looking at an email while building it.
@@ -38,7 +39,7 @@ const FIXTURES: { receipt: ReceiptEmailProps } = {
 }
 
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   ctx: RouteContext<'/dev/emails/[template]'>,
 ) {
   // Before anything renders. This route exposes fixtures and, later, a send
@@ -50,6 +51,18 @@ export async function GET(
   const { template } = await ctx.params
   if (template !== 'receipt') {
     return new Response(`Unknown template: ${template}`, { status: 404 })
+  }
+
+  // ?send=<address> exercises the whole path — render, transport, log — without
+  // running a Stripe checkout. Dev only, like everything else on this route.
+  const to = request.nextUrl.searchParams.get('send')
+  if (to) {
+    await sendEmail({
+      to,
+      subject: receiptSubject(),
+      react: <ReceiptEmail {...FIXTURES.receipt} />,
+    })
+    return new Response(`Sent to ${to}\n`)
   }
 
   const html = await render(<ReceiptEmail {...FIXTURES.receipt} />)
