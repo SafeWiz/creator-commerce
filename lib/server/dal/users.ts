@@ -37,3 +37,24 @@ export const getUserByHandle = cache(
     return found ?? null
   },
 )
+
+/**
+ * The address a transactional email goes to.
+ *
+ * The account email rather than what Stripe collected: this is where /purchases
+ * and, later, password reset already live, and Stripe's field is whatever the
+ * buyer typed into a checkout form — not necessarily an address tied to any
+ * account.
+ *
+ * Not cache()d, unlike getUserByHandle: the caller is a webhook, not a render
+ * pass, and it asks once.
+ */
+export async function getUserEmail(userId: string): Promise<string | null> {
+  const [found] = await db
+    .select({ email: user.email })
+    .from(user)
+    .where(eq(user.id, userId))
+    .limit(1)
+
+  return found?.email ?? null
+}

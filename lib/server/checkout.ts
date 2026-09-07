@@ -9,6 +9,7 @@ import {
 } from '@/lib/server/dal/purchases'
 import type { CartProduct } from '@/lib/server/dal/products'
 import type { Purchase } from '@/lib/server/db/schemas/purchase'
+import { sendReceiptEmail } from '@/lib/server/email/receipt'
 import { stripe } from '@/lib/server/stripe'
 
 /**
@@ -124,6 +125,27 @@ export async function fulfillCheckoutSession(
   }
 
   await deletePendingCheckoutSession(session.id)
+
+  // promoted.length > 0 is the exactly-once rule, and it needs no new state:
+  // whichever entry point loses the race promotes zero rows, and so does the
+  // duplicate-purchase path above.
+  //
+  // Swallowed on purpose. Throwing returns a 500, Stripe retries in good faith,
+  // and the retry's markCheckoutSessionPaid matches no pending rows and returns
+  // [] — so the receipt is lost either way and the order additionally looks
+  // unfulfilled to whoever reads the logs. Same trade deleteUploadedFiles makes:
+  // the operation the buyer cares about succeeded.
+  if (promoted.length > 0) {
+    try {
+      await sendReceiptEmail(promoted)
+    } catch (error) {
+      console.error(
+        `[checkout] receipt failed for order ${promoted[0].orderId} (session ${session.id})`,
+        error,
+      )
+    }
+  }
+
   return promoted
 }
 
