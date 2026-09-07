@@ -49,6 +49,18 @@ until the next generate run silently drops it.
 Either way, SQL in `drizzle/` is generated too: `npm run schema:migrations:generate`
 after a schema change, then `npm run schema:migrations:run`.
 
+# Email
+
+`lib/email-theme.generated.ts` is **generated** — never edit it by hand. It is
+output by `npm run schema:email-theme`, which reads the `:root` block of
+`app/globals.css`, converts each `oklch()` token to hex and resolves `--radius`
+to pixels. Email clients parse neither `oklch()` nor `var()`, and React Email's
+`<Tailwind>` takes a v3-style JS config object, so the tokens have to arrive as
+literal hex. Edit the palette in `app/globals.css`, then regenerate.
+
+Only the light tokens are read. An email has no theme toggle, and Gmail applies
+its own dark-mode inversion regardless.
+
 # Uploads
 
 Both kinds of upload are staged before they belong to anything, so a product
