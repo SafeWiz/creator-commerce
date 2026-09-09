@@ -17,10 +17,14 @@ import { Label } from "@/components/ui/label"
 /**
  * Four states, derived rather than signalled:
  *
- *   failed              → the link expired; offer a fresh one
- *   verified            → done
+ *   verified              → done, regardless of failed — a user who verified via
+ *                            a newer link and then clicks an older expired one is
+ *                            still verified; showing the expired card would send
+ *                            them to a resend button that fails with
+ *                            EMAIL_ALREADY_VERIFIED
+ *   failed, not verified  → the link expired; offer a fresh one
  *   signed in, unverified → we sent one; offer a resend
- *   signed out          → offer a resend, but ask which address
+ *   signed out            → offer a resend, but ask which address
  *
  * The resend is the one place in this whole surface where a send failure can be
  * reported. /send-verification-email awaits its hook and rethrows, unlike the
@@ -60,7 +64,7 @@ export function VerifyEmailView({
     setResent(true)
   }
 
-  if (verified && !failed) {
+  if (verified) {
     return (
       <>
         <CardHeader>

@@ -257,46 +257,6 @@ ordered by `createdAt`, top 50, no pagination. Three known limits:
 
 ## Notifications
 
-- **Receipt delivery is fire-and-forget.** `fulfillCheckoutSession` fires the
-  buyer's receipt and swallows any failure in a `.catch()`, and that is
-  deliberate: a thrown send becomes a 500, Stripe retries the webhook in good
-  faith, and the retry's `markCheckoutSessionPaid` matches no pending rows and
-  returns `[]`. So the order stays correct and the receipt is gone permanently,
-  with one `console.error` to show for it. Swallowing is the same trade already
-  made for `deleteUploadedFiles` — the operation the user cares about succeeded,
-  and failing it because a side effect failed would be worse.
-
-  The real fix is an outbox table with retries, which also answers the second
-  problem on that path: Gmail's SMTP handshake costs 1-3s inside a webhook Stripe
-  is timing. Both reasons point at the same table, so it is one piece of work,
-  not two.
-
-- **The unawaited send can be killed by the serverless runtime — refactor to
-  `after()`.** `fulfillCheckoutSession` calls `sendReceiptEmail(promoted)`
-  without awaiting it, so the buyer's post-payment redirect does not stall on
-  that 1-3s handshake — `/checkout/return` awaits fulfilment before redirecting
-  to `/purchases`, and it usually wins the race against the webhook. What it
-  costs is that nothing holds the invocation open: on Vercel the function can be
-  frozen or torn down the moment the response is sent, and a promise still in
-  flight dies with it. The receipt is lost even though the promotion committed,
-  and the `.catch()` never runs to say so.
-
-  It fails this way **only in production**. A long-running `next dev` process has
-  no such teardown, so the floating promise always completes locally — which is
-  what makes this worth writing down rather than discovering later.
-
-  `after()` from `next/server` is the fix: it runs work after the response
-  without blocking it, and keeps the invocation alive to do so. The open question
-  is where to call it. `lib/server/checkout.ts` documents itself as reading no
-  request state, which is exactly what makes it callable from the webhook, and
-  `after()` is request-scoped. So either the call moves out to the two route
-  handlers that already own request state — duplicated, against the habit of
-  extracting repeated call-site logic — or it stays in `fulfillCheckoutSession`
-  and that module's doc comment admits the exception.
-
-  The outbox above supersedes this either way: a durable row does not care
-  whether the invocation survived. Worth doing only while the outbox is unbuilt.
-
 - **Every `@react-email/*` package is marked deprecated in the lockfile.**
   `npm ls` shows `"deprecated": "Package no longer supported."` on all of them,
   `@react-email/components@1.0.12` included. It still works today, and this
@@ -304,28 +264,12 @@ ordered by `createdAt`, top 50, no pagination. Three known limits:
   package, but nobody has established what replaces it. Someone should, before
   the templates grow enough to make a migration expensive.
 
-- **Seller notification is unwritten.** One order can span several sellers, so it
-  is a `groupBy` on `sellerId` with one email each — each seller seeing only
-  their own lines. A single broadcast would leak one seller's products to
-  another, which is a privacy bug and not a formatting one. The rows in
-  `promoted` already carry `sellerId`; the address comes from a join on `user`,
-  the way `getSellerSales` already reads `buyerEmail`. Per-email `try/catch`, so
-  one bad address cannot take down the rest of the order.
-
 - **`from` is a personal Gmail address, signed with Google's DKIM.** Sending goes
   through nodemailer with a Gmail App Password (`SMTP_USER` / `SMTP_PASS`), which
   is free, delivers to any address and caps around 500/day. What it costs is
   provenance: the mail is from a person, not from the product. A domain with its
   own DKIM is what replaces it, and the swap is one file because every caller
   goes through `sendEmail`.
-
-- **`requireEmailVerification` stays off.** Nothing is wired yet —
-  `lib/server/auth.ts` has no `emailVerification` config at all, so there is no
-  `sendVerificationEmail` and no `sendOnSignUp`. The reason it has not been
-  turned on still stands, though: every existing account has
-  `emailVerified: false`, so enforcing verification at sign-in would lock out
-  all of them. Needs a backfill or a grandfather date before it can be turned
-  on, on top of the wiring itself.
 
 ## UX debt
 - Currently buying and selling are kind of a hodge podge in the dashboard layout / sidebar nav. We probably want to have buying and selling as major pieces in the UI so that users that only do one and not the other can have a more tailored experience with dedicated dashboards for each.
@@ -349,5 +293,15 @@ ordered by `createdAt`, top 50, no pagination. Three known limits:
   `sendChangeEmailVerification` are untouched. Now cheap — the handler and the
   template pattern both exist.
 
-- **Still no outbox.** A send that fails is logged and lost. Retries, and a
-  record of what was sent, remain the fix.
+- **Still no outbox.** A send that fails is logged and lost. `scheduleEmail`
+  (`lib/server/request/background.ts`) swallows the failure rather than letting
+  it escape `after()`, and that is deliberate: a dead SMTP connection reaching
+  the webhook as a throw would 500 it, and Stripe would retry for three days
+  against an order whose rows are already promoted — the retry's
+  `markCheckoutSessionPaid` matches nothing and returns `[]`, so nothing is
+  gained and the order looks broken when it isn't. Swallowing is the same trade
+  already made for `deleteUploadedFiles` — the operation the user cares about
+  succeeded, and failing it because a side effect failed would be worse.
+  Retries, and a record of what was sent, remain the fix; it also answers Gmail's
+  1-3s SMTP handshake happening inside a webhook Stripe is timing, so it is one
+  piece of work, not two.

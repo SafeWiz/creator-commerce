@@ -25,7 +25,13 @@ export async function GET(
   }
 
   const { template } = await ctx.params
-  const fixture = TEMPLATES[template]
+  // TEMPLATES is a plain object literal, so a bare index lookup also resolves
+  // inherited members — TEMPLATES['constructor'] or ['toString'] would return
+  // one, pass the falsy check below, and reach render(undefined) as a 500
+  // instead of the 404 an unknown template should get.
+  const fixture = Object.hasOwn(TEMPLATES, template)
+    ? TEMPLATES[template]
+    : undefined
 
   if (!fixture) {
     return new Response(

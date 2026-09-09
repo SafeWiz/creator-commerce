@@ -40,7 +40,15 @@ export async function sendOrderEmails(purchases: Purchase[]): Promise<void> {
     else bySeller.set(purchase.sellerId, [purchase])
   }
 
-  const sends: Promise<void>[] = [sendReceiptEmail(purchases)]
+  // .catch() attached in the same tick the promise is created, not left until
+  // Promise.allSettled below: the seller-address lookup is awaited before that
+  // point, and a receipt rejection in that window would otherwise surface as an
+  // unhandledRejection with a bare stack and no order id.
+  const sends: Promise<void>[] = [
+    sendReceiptEmail(purchases).catch((error) => {
+      console.error(`[email] receipt failed for order ${first.orderId}`, error)
+    }),
+  ]
 
   let sellerEmails: Map<string, string>
   try {
@@ -56,9 +64,12 @@ export async function sendOrderEmails(purchases: Purchase[]): Promise<void> {
   for (const [sellerId, rows] of bySeller) {
     const to = sellerEmails.get(sellerId)
     if (!to) {
-      // Near-impossible: purchases.sellerId is onDelete: 'restrict'. Logged and
-      // skipped rather than thrown, because one unreachable seller must not cost
-      // the buyer their receipt.
+      // Missing outright is near-impossible: purchases.sellerId is
+      // onDelete: 'restrict', so the row can't reference a deleted user. Logged
+      // and skipped rather than thrown, because one unreachable seller must not
+      // cost the buyer their receipt. The case allSettled below actually exists
+      // for is different: a present but malformed email — nothing validates it
+      // at write time — reaching sendSaleEmail and rejecting there.
       console.error(
         `[email] no address for seller ${sellerId} — sale notification for order ${first.orderId} not sent`,
       )

@@ -16,8 +16,11 @@ import { Label } from "@/components/ui/label"
  * an unknown address specifically so the response cannot be timed apart from a
  * known one. Branching the UI on that response would hand back the enumeration
  * signal it just paid to suppress — so the confirmation below is rendered on
- * success and on failure alike, and the only errors surfaced are the ones that
- * are not about whether the account exists.
+ * success and on failure alike. The call's result is never even destructured:
+ * no error is surfaced, not a rate limit, not a 500, nothing. That is the
+ * deliberate trade — the alternative is picking apart which failures are safe
+ * to show without leaking whether the address exists, and getting that wrong
+ * once reopens the enumeration Better Auth just paid to close.
  */
 export function ForgotPasswordForm() {
   const [pending, setPending] = useState(false)

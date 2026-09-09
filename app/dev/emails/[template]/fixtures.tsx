@@ -12,9 +12,11 @@ import { VerifyEmail, verifyEmailSubject } from '@/components/email/verify-email
  * Every template the dev preview can render, and the data it renders with.
  *
  * Here rather than beside each template: fixtures exist to exercise a layout —
- * a name long enough to wrap, a zero price — and nothing in production should be
- * able to import them. The route stays free of per-template knowledge, so adding
- * a template is an entry in this record and nothing else.
+ * a name long enough to wrap, a zero price. Both the page and the route handler
+ * for /dev/emails do import this module in the production bundle — they're not
+ * excluded from it — but they 404 before ever touching it, so it is unreachable
+ * in production rather than un-imported. The route stays free of per-template
+ * knowledge, so adding a template is an entry in this record and nothing else.
  */
 export type EmailFixture = {
   subject: string

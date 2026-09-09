@@ -125,7 +125,18 @@ export async function fulfillCheckoutSession(
     return []
   }
 
-  await deletePendingCheckoutSession(session.id)
+  // Tolerable to fail: it only leaves a dead pending row, and the NOT EXISTS
+  // guard means that row can never be re-promoted. Losing the order's mail to it
+  // would not be tolerable — the caller schedules that off `promoted`, so a
+  // throw here would take the receipt and every seller notification with it.
+  try {
+    await deletePendingCheckoutSession(session.id)
+  } catch (error) {
+    console.error(
+      `[checkout] sweep failed for session ${session.id} — dead pending rows left behind`,
+      error,
+    )
+  }
 
   return promoted
 }

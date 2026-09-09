@@ -38,6 +38,10 @@ export const auth = betterAuth({
     // emailVerified: false, so turning the gate on locks out every account; the
     // banner in DashboardShell is the nudge until that is dealt with.
     sendResetPassword: ({ user, url }) => sendPasswordResetEmail({ user, url }),
+    // Better Auth defaults this to false. The usual reason to reset a password
+    // is that someone else has access, and leaving their existing session alive
+    // through the reset that is meant to lock them out defeats the point.
+    revokeSessionsOnPasswordReset: true,
   },
   emailVerification: {
     sendOnSignUp: true,
@@ -56,6 +60,14 @@ export const auth = betterAuth({
       bio: { type: 'string', required: false, input: true },
     },
   },
+  // Better Auth defaults rate-limit storage to in-memory, which is fine on a
+  // single long-running process but not on serverless: each instance keeps its
+  // own counter, so the real request rate against forgot-password and
+  // send-verification-email is the per-instance limit times however many
+  // instances are warm. Both endpoints trigger mail through a Gmail App
+  // Password capped near 500/day, so under-counting there is the risk, not a
+  // convenience. Database storage shares one counter across instances.
+  rateLimit: { storage: 'database' },
   // nextCookies must be the last plugin: it lets server actions set
   // auth cookies via next/headers.
   plugins: [nextCookies()],

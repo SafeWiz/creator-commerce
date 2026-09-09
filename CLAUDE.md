@@ -20,17 +20,35 @@ actions, marked with `'use server'`, imported by client components.
 
 **`lib/server/request/`** is the only place under `lib/server/` that may import
 `next/headers`, `next/navigation`, `next/cache` or `next/server`. Its modules
-are callable only from a route handler, a server action, or a server component;
-everything else under `lib/server/` is request-agnostic and callable from a
-script or a cron. `after()` throws outside a request scope, so this is a real
-constraint rather than a stylistic one, and it is checkable:
+are callable only from a route handler, a server action, or a server component.
+The real rule is broader than direct imports, though: a module outside
+`request/` may import *from* `request/` only if it is itself only ever entered
+from a request, because that makes it transitively request-scoped — `after()`
+throws outside a request scope. Two modules today are in that position despite
+living outside `request/`: `auth.ts` (imports `scheduleBackgroundTask` from
+`request/background.ts`) and `uploadthing.ts` (imports `getUser` from
+`request/session.ts`). Both are safe only because Better Auth's routes and the
+UploadThing route handler are themselves always entered from a request — a
+future call from `scripts/` (e.g. `auth.api.requestPasswordReset(...)`) would
+reach `after()` with no request scope, and Better Auth's own try/catch around
+its hooks swallows that throw, so the mail would drop silently with nothing for
+lint or `tsc` to catch.
+
+The grep below only catches the first, direct-import case:
 
 ```bash
 grep -rn "next/headers\|next/navigation\|next/cache\|next/server" lib/server --exclude-dir=request
 ```
 
-It holds `session.ts` (the session helpers), `cart.ts` (the cart cookie),
-`revalidate.ts`, `background.ts` (the app's only `after()` call),
+This one catches the second — anything outside `request/` that imports from it,
+so a new entry becomes a deliberate decision instead of an accident:
+
+```bash
+grep -rn "server/request" lib/server --include='*.ts' --include='*.tsx' | grep -v '^lib/server/request/'
+```
+
+`request/` itself holds `session.ts` (the session helpers), `cart.ts` (the cart
+cookie), `revalidate.ts`, `background.ts` (the app's only `after()` call),
 `checkout.ts` (`fulfillAndNotify`) and `stripe-webhook.ts`.
 
 **Server actions** (`lib/actions/*`) resolve the current user, parse input, call
