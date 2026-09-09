@@ -1142,9 +1142,25 @@ export async function sendOrderEmails(purchases: Purchase[]): Promise<void> {
     else bySeller.set(purchase.sellerId, [purchase])
   }
 
-  const sellerEmails = await getUserEmails([...bySeller.keys()])
-
+  // Queued before the lookup is awaited, deliberately. A transient database
+  // error resolving seller addresses must not take the receipt down with it —
+  // allSettled below isolates a bad address and a failed send, but it cannot
+  // isolate the query that feeds it.
   const sends: Promise<void>[] = [sendReceiptEmail(purchases)]
+
+  let sellerEmails: Map<string, string>
+  try {
+    sellerEmails = await getUserEmails([...bySeller.keys()])
+  } catch (error) {
+    // An empty Map sends every seller through the missing-address branch below,
+    // which already logs and skips one at a time. So this degrades to "receipt
+    // sent, notifications skipped, logged" rather than aborting.
+    console.error(
+      `[email] seller address lookup failed for order ${first.orderId}`,
+      error,
+    )
+    sellerEmails = new Map()
+  }
 
   for (const [sellerId, rows] of bySeller) {
     const to = sellerEmails.get(sellerId)

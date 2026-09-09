@@ -585,6 +585,14 @@ rows are already promoted and the retry promotes nothing.
 `all` would abandon the remaining sends on the first rejection, so a seller whose
 account row has a malformed address could cost the buyer their receipt.
 
+**The receipt is queued before the seller lookup is awaited.** `allSettled`
+isolates a bad address and a failed send; it cannot isolate the `getUserEmails`
+query that feeds it, and awaiting that first would let a transient database error
+throw before the receipt was ever attempted — the same failure the previous
+paragraph exists to prevent, arriving by a different door. The lookup is wrapped
+so a failure degrades to an empty `Map`, which sends every seller through the
+missing-address branch that already logs and skips.
+
 **A missing address is logged and skipped.** For the buyer this is near
 impossible — `purchases.buyerId` is `onDelete: 'restrict'` — and the existing
 code already treats it this way. The seller path takes the same trade.
