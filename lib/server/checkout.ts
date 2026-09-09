@@ -9,6 +9,7 @@ import {
 } from '@/lib/server/dal/purchases'
 import type { CartProduct } from '@/lib/server/dal/products'
 import type { Purchase } from '@/lib/server/db/schemas/purchase'
+import { sendReceiptEmail } from '@/lib/server/email/receipt'
 import { stripe } from '@/lib/server/stripe'
 
 /**
@@ -123,7 +124,44 @@ export async function fulfillCheckoutSession(
     return []
   }
 
+  // promoted.length > 0 is the exactly-once rule, and it needs no new state:
+  // whichever entry point loses the race promotes zero rows, and so does the
+  // duplicate-purchase path above.
+  //
+  // Fired before the sweep below, not after: the promotion is what the receipt
+  // attests to, and that has already happened by this point. The sweep failing
+  // afterward is tolerable — it just leaves a dead pending row — but losing the
+  // receipt to an unrelated throw in the sweep would not be.
+  //
+  // Not awaited: this function sits on the buyer's post-payment redirect path
+  // (app/checkout/return/route.ts awaits it before sending them to /purchases),
+  // and that redirect should not stall on a 1-3s SMTP handshake. The .catch()
+  // below is what keeps this safe with nothing awaiting it — every path out of
+  // the promise ends there, so no unhandled rejection is possible.
+  //
+  // Swallowed on purpose, same reasoning the old try/catch used: throwing
+  // returns a 500, Stripe retries in good faith, and the retry's
+  // markCheckoutSessionPaid matches no pending rows and returns [] — so the
+  // receipt is lost either way and the order additionally looks unfulfilled to
+  // whoever reads the logs. Same trade deleteUploadedFiles makes: the operation
+  // the buyer cares about succeeded.
+  //
+  // One caveat worth stating plainly: a promise nothing awaits can be torn down
+  // by a serverless runtime as soon as the response is sent, so a receipt can
+  // still be lost that way even though the promotion went through. next/server's
+  // after() exists to hold the invocation open past the response and is the fix
+  // if that ever proves to happen in practice — not applied here.
+  if (promoted.length > 0) {
+    sendReceiptEmail(promoted).catch((error) => {
+      console.error(
+        `[checkout] receipt failed for order ${promoted[0].orderId} (session ${session.id})`,
+        error,
+      )
+    })
+  }
+
   await deletePendingCheckoutSession(session.id)
+
   return promoted
 }
 
