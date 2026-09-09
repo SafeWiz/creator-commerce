@@ -8,7 +8,7 @@ import {
   MAX_PRODUCT_FILE_LABEL,
 } from '@/lib/schemas/product'
 import { recordProductImageUpload, recordProductUpload } from '@/lib/server/dal/products'
-import { getUser } from '@/lib/server/session'
+import { getUser } from '@/lib/server/request/session'
 
 const f = createUploadthing()
 

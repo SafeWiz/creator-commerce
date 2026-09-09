@@ -6,14 +6,14 @@ import { redirect } from 'next/navigation'
 import { APP_CURRENCY } from '@/lib/currency'
 import { authPathWithNext } from '@/lib/schemas/auth'
 import { MAX_CART_ITEMS } from '@/lib/schemas/cart'
-import { commitCart, readCartIds } from '@/lib/server/cart'
+import { commitCart, readCartIds } from '@/lib/server/request/cart'
 import { createCheckoutSession } from '@/lib/server/checkout'
 import { getCartProducts } from '@/lib/server/dal/products'
 import {
   createPurchases,
   getPurchasedProductIds,
 } from '@/lib/server/dal/purchases'
-import { getUser } from '@/lib/server/session'
+import { getUser } from '@/lib/server/request/session'
 
 /**
  * Cart mutations.

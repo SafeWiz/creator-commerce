@@ -1,8 +1,8 @@
 import { render } from '@react-email/components'
 import type { NextRequest } from 'next/server'
 
-import { ReceiptEmail, receiptSubject, type ReceiptEmailProps } from '@/components/email/receipt'
 import { sendEmail } from '@/lib/server/email/send'
+import { TEMPLATES } from './fixtures'
 
 /**
  * Looking at an email while building it.
@@ -11,61 +11,44 @@ import { sendEmail } from '@/lib/server/email/send'
  * boots its own Next app and expects an emails/ directory at the repo root. This
  * gives the same loop — edit, refresh — for no extra dependency.
  *
- * Fixtures live here rather than beside the template: they exist to exercise the
- * layout (a long name that has to wrap, a zero price), and nothing in production
- * should be able to import them.
+ * The route knows nothing about any individual template; fixtures.tsx is the
+ * registry.
  */
-const APP_URL = process.env.APP_URL ?? 'http://localhost:3000'
-
-const FIXTURES: { receipt: ReceiptEmailProps } = {
-  receipt: {
-    orderId: '3f1c0b8e-9d2a-4f77-9a1e-5c6f2b7d8e90',
-    appUrl: APP_URL,
-    items: [
-      {
-        productId: 1,
-        productName: 'Lightroom Presets — Golden Hour',
-        priceInCents: 12900,
-      },
-      {
-        productId: 2,
-        productName:
-          'A deliberately long product name that has to wrap inside a narrow email column without pushing the price out of alignment',
-        priceInCents: 4900,
-      },
-      { productId: 3, productName: 'Free sample pack', priceInCents: 0 },
-    ],
-  },
-}
-
 export async function GET(
   request: NextRequest,
   ctx: RouteContext<'/dev/emails/[template]'>,
 ) {
-  // Before anything renders. This route exposes fixtures and, later, a send
-  // trigger; neither belongs to a deployed app.
+  // Before anything renders. This route exposes fixtures and a send trigger;
+  // neither belongs to a deployed app.
   if (process.env.NODE_ENV === 'production') {
     return new Response('Not found', { status: 404 })
   }
 
   const { template } = await ctx.params
-  if (template !== 'receipt') {
-    return new Response(`Unknown template: ${template}`, { status: 404 })
+  // TEMPLATES is a plain object literal, so a bare index lookup also resolves
+  // inherited members — TEMPLATES['constructor'] or ['toString'] would return
+  // one, pass the falsy check below, and reach render(undefined) as a 500
+  // instead of the 404 an unknown template should get.
+  const fixture = Object.hasOwn(TEMPLATES, template)
+    ? TEMPLATES[template]
+    : undefined
+
+  if (!fixture) {
+    return new Response(
+      `Unknown template: ${template}\nKnown: ${Object.keys(TEMPLATES).join(', ')}\n`,
+      { status: 404 },
+    )
   }
 
   // ?send=<address> exercises the whole path — render, transport, log — without
-  // running a Stripe checkout. Dev only, like everything else on this route.
+  // running a Stripe checkout or a password reset. Dev only, like the rest.
   const to = request.nextUrl.searchParams.get('send')
   if (to) {
-    await sendEmail({
-      to,
-      subject: receiptSubject(),
-      react: <ReceiptEmail {...FIXTURES.receipt} />,
-    })
+    await sendEmail({ to, subject: fixture.subject, react: fixture.element })
     return new Response(`Sent to ${to}\n`)
   }
 
-  const html = await render(<ReceiptEmail {...FIXTURES.receipt} />)
+  const html = await render(fixture.element)
 
   return new Response(html, {
     headers: { 'Content-Type': 'text/html; charset=utf-8' },

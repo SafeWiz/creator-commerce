@@ -11,12 +11,12 @@ import {
   setProductImages,
   updateUserProduct,
 } from '@/lib/server/dal/products'
-import { revalidateStorefront } from '@/lib/server/revalidate'
+import { revalidateStorefront } from '@/lib/server/request/revalidate'
 import {
   deleteUploadedFileKeys,
   deleteUploadedFiles,
 } from '@/lib/server/uploadthing'
-import { requireUser } from '@/lib/server/session'
+import { requireUser } from '@/lib/server/request/session'
 import {
   MAX_PRODUCT_IMAGES,
   createProductWithFileSchema,

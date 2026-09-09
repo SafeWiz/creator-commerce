@@ -1,7 +1,7 @@
 import type { Metadata } from "next"
 
 import { getSellerSales, getSellerTotals } from "@/lib/server/dal/purchases"
-import { requireUser } from "@/lib/server/session"
+import { requireUser } from "@/lib/server/request/session"
 import { TableCard } from "@/components/table-card"
 import {
   Card,

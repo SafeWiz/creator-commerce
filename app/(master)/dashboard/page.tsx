@@ -8,7 +8,7 @@ import {
   getSellerTopProducts,
   getSellerTotals,
 } from "@/lib/server/dal/purchases"
-import { requireUser } from "@/lib/server/session"
+import { requireUser } from "@/lib/server/request/session"
 import { formatPrice } from "@/lib/currency"
 import { TopProductsCard } from "@/components/top-products-card"
 import { Badge } from "@/components/ui/badge"

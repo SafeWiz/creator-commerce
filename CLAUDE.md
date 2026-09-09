@@ -18,6 +18,39 @@ Everything else directly under `lib/` is environment-agnostic and safe on both
 sides: `lib/utils.ts`, `lib/schemas/*`. `lib/actions/*` is its own case — server
 actions, marked with `'use server'`, imported by client components.
 
+**`lib/server/request/`** is the only place under `lib/server/` that may import
+`next/headers`, `next/navigation`, `next/cache` or `next/server`. Its modules
+are callable only from a route handler, a server action, or a server component.
+The real rule is broader than direct imports, though: a module outside
+`request/` may import *from* `request/` only if it is itself only ever entered
+from a request, because that makes it transitively request-scoped — `after()`
+throws outside a request scope. Two modules today are in that position despite
+living outside `request/`: `auth.ts` (imports `scheduleBackgroundTask` from
+`request/background.ts`) and `uploadthing.ts` (imports `getUser` from
+`request/session.ts`). Both are safe only because Better Auth's routes and the
+UploadThing route handler are themselves always entered from a request — a
+future call from `scripts/` (e.g. `auth.api.requestPasswordReset(...)`) would
+reach `after()` with no request scope, and Better Auth's own try/catch around
+its hooks swallows that throw, so the mail would drop silently with nothing for
+lint or `tsc` to catch.
+
+The grep below only catches the first, direct-import case:
+
+```bash
+grep -rn "next/headers\|next/navigation\|next/cache\|next/server" lib/server --exclude-dir=request
+```
+
+This one catches the second — anything outside `request/` that imports from it,
+so a new entry becomes a deliberate decision instead of an accident:
+
+```bash
+grep -rn "server/request" lib/server --include='*.ts' --include='*.tsx' | grep -v '^lib/server/request/'
+```
+
+`request/` itself holds `session.ts` (the session helpers), `cart.ts` (the cart
+cookie), `revalidate.ts`, `background.ts` (the app's only `after()` call),
+`checkout.ts` (`fulfillAndNotify`) and `stripe-webhook.ts`.
+
 **Server actions** (`lib/actions/*`) resolve the current user, parse input, call
 a DAL function, then handle Next.js concerns (`revalidatePath`, `redirect`). They
 never query tables.
@@ -30,7 +63,7 @@ passes it in.
 - Domain rules that every caller needs (e.g. deriving a product slug from its
   name) belong in the DAL, not in the action.
 
-**Session/auth helpers** live in `lib/server/session.ts`, not the DAL. Callers
+**Session/auth helpers** live in `lib/server/request/session.ts`, not the DAL. Callers
 (actions, pages, layouts) resolve the user there and pass ids down:
 - `getUser()` is `cache()`-wrapped so repeated calls in one render pass hit the
   session once; `requireUser()` wraps it and redirects to `/login` when absent.
@@ -71,6 +104,28 @@ over one nodemailer transporter picked at module load by
   authenticated `SMTP_USER` account unless the address given is a verified
   alias on that account, so setting a domain address without adding it as an
   alias fails silently rather than erroring.
+
+A paid order produces one receipt for the buyer and one notification per seller.
+`sendOrderEmails` in `lib/server/email/order.ts` groups the promoted purchase
+rows by `sellerId` so a three-product order from one seller is one email rather
+than three, resolves every seller address in a single `getUserEmails` query, and
+runs the sends through `Promise.allSettled` — a seller with an unreachable
+address must not cost the buyer their receipt. The seller's copy carries no
+buyer identity.
+
+Better Auth's own mail — password reset and email verification — is composed in
+`lib/server/email/auth.tsx` and wired in `lib/server/auth.ts`. Those hooks are
+plain awaited functions; `advanced.backgroundTasks.handler` is what keeps them
+off the response path, and without it Better Auth awaits them inline. Note that
+`runInBackgroundOrAwait` swallows send failures in both of its branches, so the
+reset and signup endpoints answer `status: true` regardless — only
+`/send-verification-email` awaits and rethrows, which is why the resend button
+on `/verify-email` is the one place a send failure is reported to the user.
+
+Verification is soft: `sendOnSignUp` is on, `requireEmailVerification` is not
+set, and the banner in `DashboardShell` is the only thing that asks. Turning the
+gate on would lock out every existing row, all of which have
+`emailVerified: false`.
 
 Both credentials absent is a supported state, not a broken one: the transporter
 becomes nodemailer's `jsonTransport`, which builds the message without opening a

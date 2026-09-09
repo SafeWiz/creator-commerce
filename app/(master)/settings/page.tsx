@@ -1,6 +1,6 @@
 import type { Metadata } from "next"
 
-import { requireUser } from "@/lib/server/session"
+import { requireUser } from "@/lib/server/request/session"
 import { Button } from "@/components/ui/button"
 import {
   Card,

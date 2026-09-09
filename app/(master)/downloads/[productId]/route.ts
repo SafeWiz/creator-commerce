@@ -3,7 +3,7 @@ import { NextResponse, type NextRequest } from 'next/server'
 
 import { authPathWithNext } from '@/lib/schemas/auth'
 import { getDownloadableProductFile } from '@/lib/server/dal/downloads'
-import { getUser } from '@/lib/server/session'
+import { getUser } from '@/lib/server/request/session'
 import { signProductFileUrl } from '@/lib/server/uploadthing'
 
 /**

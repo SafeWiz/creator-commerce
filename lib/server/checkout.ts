@@ -9,7 +9,6 @@ import {
 } from '@/lib/server/dal/purchases'
 import type { CartProduct } from '@/lib/server/dal/products'
 import type { Purchase } from '@/lib/server/db/schemas/purchase'
-import { sendReceiptEmail } from '@/lib/server/email/receipt'
 import { stripe } from '@/lib/server/stripe'
 
 /**
@@ -18,13 +17,15 @@ import { stripe } from '@/lib/server/stripe'
  * Its own module rather than living in lib/actions/cart.ts because two entry
  * points need the same fulfilment: the browser coming back from Stripe
  * (app/checkout/return/route.ts) and Stripe's own webhook
- * (app/api/stripe/webhook/route.ts). Whichever arrives first does the work.
+ * (lib/server/request/stripe-webhook.ts). Whichever arrives first does the work.
+ * Both reach it through fulfillAndNotify, which adds the mail this module
+ * deliberately does not send.
  *
  * The layering, deliberately: route handlers and actions own request state —
  * cookies, redirects, revalidation — this module owns Stripe and sequencing, and
- * the DAL owns SQL. Nothing here reads headers() or cookies() or redirects, which
- * is what makes it callable from the webhook, where there is no browser and no
- * request context to read.
+ * the DAL owns SQL. Nothing here reads headers() or cookies() or redirects, and
+ * nothing here calls after() — which is what keeps it callable from a script
+ * with no request scope, not merely from the webhook.
  */
 
 // Stripe's minimum, and the shortest we can make an abandoned checkout give up
@@ -84,6 +85,29 @@ export async function createCheckoutSession(params: {
 }
 
 /**
+ * Sweeps a session's leftover pending rows without letting the sweep itself
+ * fail the caller.
+ *
+ * Both call sites in fulfillCheckoutSession reach this after the session's rows
+ * are already promoted (or, on the duplicate-purchase path, already owned
+ * through another session) — a throw here would 500 the webhook for a session
+ * whose real work is done, buying nothing but the pointless Stripe retries the
+ * comments in this file already argue against. Losing the sweep only leaves a
+ * dead pending row behind; the NOT EXISTS guard in markCheckoutSessionPaid means
+ * that row can never be re-promoted.
+ */
+async function sweepPendingRows(sessionId: string): Promise<void> {
+  try {
+    await deletePendingCheckoutSession(sessionId)
+  } catch (error) {
+    console.error(
+      `[checkout] sweep failed for session ${sessionId} — dead pending rows left behind`,
+      error,
+    )
+  }
+}
+
+/**
  * The one place a paid session becomes owned products.
  *
  * Promote first, sweep second. The other order looks equivalent and isn't: a
@@ -120,110 +144,13 @@ export async function fulfillCheckoutSession(
     console.error(
       `[checkout] duplicate purchase in session ${session.id} — the buyer paid for something they already own and needs a refund for that line`,
     )
-    await deletePendingCheckoutSession(session.id)
+    await sweepPendingRows(session.id)
     return []
   }
 
-  // promoted.length > 0 is the exactly-once rule, and it needs no new state:
-  // whichever entry point loses the race promotes zero rows, and so does the
-  // duplicate-purchase path above.
-  //
-  // Fired before the sweep below, not after: the promotion is what the receipt
-  // attests to, and that has already happened by this point. The sweep failing
-  // afterward is tolerable — it just leaves a dead pending row — but losing the
-  // receipt to an unrelated throw in the sweep would not be.
-  //
-  // Not awaited: this function sits on the buyer's post-payment redirect path
-  // (app/checkout/return/route.ts awaits it before sending them to /purchases),
-  // and that redirect should not stall on a 1-3s SMTP handshake. The .catch()
-  // below is what keeps this safe with nothing awaiting it — every path out of
-  // the promise ends there, so no unhandled rejection is possible.
-  //
-  // Swallowed on purpose, same reasoning the old try/catch used: throwing
-  // returns a 500, Stripe retries in good faith, and the retry's
-  // markCheckoutSessionPaid matches no pending rows and returns [] — so the
-  // receipt is lost either way and the order additionally looks unfulfilled to
-  // whoever reads the logs. Same trade deleteUploadedFiles makes: the operation
-  // the buyer cares about succeeded.
-  //
-  // One caveat worth stating plainly: a promise nothing awaits can be torn down
-  // by a serverless runtime as soon as the response is sent, so a receipt can
-  // still be lost that way even though the promotion went through. next/server's
-  // after() exists to hold the invocation open past the response and is the fix
-  // if that ever proves to happen in practice — not applied here.
-  if (promoted.length > 0) {
-    sendReceiptEmail(promoted).catch((error) => {
-      console.error(
-        `[checkout] receipt failed for order ${promoted[0].orderId} (session ${session.id})`,
-        error,
-      )
-    })
-  }
-
-  await deletePendingCheckoutSession(session.id)
+  await sweepPendingRows(session.id)
 
   return promoted
-}
-
-/**
- * Stripe's side of the flow. Mounted at app/api/stripe/webhook/route.ts.
- *
- * Status codes are the contract here, not decoration: 400 tells Stripe the
- * request was never valid, 500 asks it to retry with backoff, and 200 means done
- * — including for events we do not handle, since anything else marks the endpoint
- * as failing in the dashboard.
- */
-export async function handleStripeWebhook(request: Request): Promise<Response> {
-  // Before anything else, and text() rather than json(): the signature covers the
-  // raw bytes, so re-serialising a parsed body would invalidate it.
-  const body = await request.text()
-  const signature = request.headers.get('stripe-signature')
-
-  if (!signature) {
-    return new Response('Missing stripe-signature header', { status: 400 })
-  }
-
-  let event: Stripe.Event
-  try {
-    event = await stripe.webhooks.constructEventAsync(
-      body,
-      signature,
-      process.env.STRIPE_WEBHOOK_SECRET!,
-    )
-  } catch (error) {
-    // A 400 here means the secret is wrong or the request is forged. Stripe will
-    // retry and keep failing, which is the point — this should be loud rather
-    // than silently swallowed with a 200.
-    const message = error instanceof Error ? error.message : 'Invalid signature'
-    console.error(`[checkout] webhook signature rejected: ${message}`)
-    return new Response('Invalid signature', { status: 400 })
-  }
-
-  // log event type
-  console.log('stripe event:', event.type)
-
-  // Anything thrown past here is left to propagate: a database failure should
-  // become a 500 so Stripe retries, rather than a 200 that loses the order.
-  switch (event.type) {
-    case 'checkout.session.completed':
-    case 'checkout.session.async_payment_succeeded': {
-      const session = event.data.object
-      // 'completed' fires for delayed payment methods too, where the session is
-      // done but the money is not in yet. That case is finished later by
-      // async_payment_succeeded.
-      if (session.payment_status !== 'unpaid') {
-        await fulfillCheckoutSession(session)
-      }
-      break
-    }
-    case 'checkout.session.expired':
-    case 'checkout.session.async_payment_failed': {
-      await deletePendingCheckoutSession(event.data.object.id)
-      break
-    }
-  }
-
-  return Response.json({ received: true })
 }
 
 /**

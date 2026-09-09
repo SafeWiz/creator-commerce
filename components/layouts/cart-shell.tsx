@@ -1,6 +1,6 @@
 import Link from "next/link"
 
-import { getUser } from "@/lib/server/session"
+import { getUser } from "@/lib/server/request/session"
 import { authPathWithNext } from "@/lib/schemas/auth"
 import { Logo, Wordmark } from "@/components/logo"
 import { Button } from "@/components/ui/button"

@@ -585,6 +585,14 @@ rows are already promoted and the retry promotes nothing.
 `all` would abandon the remaining sends on the first rejection, so a seller whose
 account row has a malformed address could cost the buyer their receipt.
 
+**The receipt is queued before the seller lookup is awaited.** `allSettled`
+isolates a bad address and a failed send; it cannot isolate the `getUserEmails`
+query that feeds it, and awaiting that first would let a transient database error
+throw before the receipt was ever attempted — the same failure the previous
+paragraph exists to prevent, arriving by a different door. The lookup is wrapped
+so a failure degrades to an empty `Map`, which sends every seller through the
+missing-address branch that already logs and skips.
+
 **A missing address is logged and skipped.** For the buyer this is near
 impossible — `purchases.buyerId` is `onDelete: 'restrict'` — and the existing
 code already treats it this way. The seller path takes the same trade.
@@ -621,7 +629,9 @@ Manual, since the project has no test harness:
 
 1. `npm run lint` and a build pass.
 2. `grep -rn "next/headers\|next/navigation\|next/cache\|next/server" lib/server
-   --exclude-dir=request` returns nothing.
+   --exclude-dir=request` returns exactly one line — a comment in
+   `lib/server/auth.ts` explaining why `nextCookies()` must be the last
+   plugin, which mentions `next/headers` in prose — and no imports.
 3. `/dev/emails` lists four templates; each renders; `?send=` on each logs a
    complete message with no credentials in the output.
 4. A checkout of two products from two different sellers produces three console

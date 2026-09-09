@@ -1,7 +1,7 @@
 import Link from "next/link"
 import { ExternalLink } from "lucide-react"
 
-import { requireUser } from "@/lib/server/session"
+import { requireUser } from "@/lib/server/request/session"
 import { getInitials } from "@/lib/utils"
 import { Logo, Wordmark } from "@/components/logo"
 import {
@@ -10,6 +10,7 @@ import {
 } from "@/components/layouts/dashboard-nav"
 import { SignOutButton } from "@/components/layouts/sign-out-button"
 import { DashboardTopbarTitle } from "@/components/layouts/dashboard-topbar-title"
+import { VerifyEmailBanner } from "@/components/layouts/verify-email-banner"
 import { CartBadge } from "@/components/cart-badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -66,6 +67,7 @@ export async function DashboardShell({
             <ExternalLink /> View storefront
           </Button>
         </header>
+        {!user.emailVerified && <VerifyEmailBanner />}
         <main className="flex-1 overflow-auto">{children}</main>
       </SidebarInset>
     </SidebarProvider>

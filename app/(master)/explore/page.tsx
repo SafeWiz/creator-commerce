@@ -9,9 +9,9 @@ import {
   exploreSort,
   type ExploreSort,
 } from "@/lib/schemas/explore"
-import { readCartMembership } from "@/lib/server/cart"
+import { readCartMembership } from "@/lib/server/request/cart"
 import { searchPublishedProducts } from "@/lib/server/dal/products"
-import { requireUser } from "@/lib/server/session"
+import { requireUser } from "@/lib/server/request/session"
 import { ProductCard } from "@/components/product-card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { ExploreSearchInput } from "./explore-search-input"

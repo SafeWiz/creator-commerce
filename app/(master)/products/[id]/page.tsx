@@ -2,7 +2,7 @@ import type { Metadata } from "next"
 import { notFound } from "next/navigation"
 
 import { getUserProduct } from "@/lib/server/dal/products"
-import { requireUser } from "@/lib/server/session"
+import { requireUser } from "@/lib/server/request/session"
 import { ProductForm } from "@/components/product-form"
 import { updateProductAction } from "@/lib/actions/products"
 

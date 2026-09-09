@@ -2,10 +2,10 @@ import type { Metadata } from "next"
 import { notFound } from "next/navigation"
 import Link from "next/link"
 
-import { readCartMembership } from "@/lib/server/cart"
+import { readCartMembership } from "@/lib/server/request/cart"
 import { getStorefrontProducts } from "@/lib/server/dal/products"
 import { getUserByHandle } from "@/lib/server/dal/users"
-import { getUser } from "@/lib/server/session"
+import { getUser } from "@/lib/server/request/session"
 import { ProductCard } from "@/components/product-card"
 import { parseHandleSegment } from "@/lib/utils"
 

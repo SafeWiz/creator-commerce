@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation"
 import Link from "next/link"
 
 import { signUp } from "@/lib/client/auth"
-import { authPathWithNext } from "@/lib/schemas/auth"
+import { authPathWithNext, PASSWORD_MIN_LENGTH } from "@/lib/schemas/auth"
 import { Button } from "@/components/ui/button"
 import { CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -83,7 +83,7 @@ export function SignupForm({ next }: { next: string }) {
             name="password"
             type="password"
             autoComplete="new-password"
-            minLength={8}
+            minLength={PASSWORD_MIN_LENGTH}
             required
           />
         </div>

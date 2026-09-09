@@ -13,7 +13,7 @@ import {
 
 import { fileTypeLabel } from "@/lib/file-type"
 import { getBuyerDownloads } from "@/lib/server/dal/downloads"
-import { requireUser } from "@/lib/server/session"
+import { requireUser } from "@/lib/server/request/session"
 import { formatFileSize } from "@/lib/utils"
 import { TableCard } from "@/components/table-card"
 import { Badge } from "@/components/ui/badge"

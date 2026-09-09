@@ -12,8 +12,11 @@
 
 - **Spec:** `docs/superpowers/specs/2026-09-09-seller-and-auth-email-design.md`. Read it before starting.
 - **Read the Next.js docs before writing routing or request-API code.** This is not the Next.js in your training data. Guides live in `node_modules/next/dist/docs/`. `after()` is `node_modules/next/dist/docs/01-app/03-api-reference/04-functions/after.md`.
-- **Gabi runs all npm scripts.** Never run `npm run lint`, `npm run build`, `npm install`, or any `schema:*` script yourself. When a step needs one, ask Gabi to run it and wait for the output before continuing.
+- **You may run `npm run lint` and `npx tsc --noEmit`. Nothing else.** Gabi runs `npm run build`, `npm run dev`, `npm install` and every `schema:*` script himself — when a step needs one of those, say so in your report and stop; do not run it. (This is a grant for this plan only. Gabi's standing preference is that he runs everything; he relaxed it for the two read-only checks.)
+- **Run `npm run lint` and `npx tsc --noEmit` before every commit**, even where a task's steps only name one of them. Both must be clean.
+- **You commit your own task.** Use the commit message given in the task's final step verbatim, including its `Claude-Session:` trailer.
 - **Every module under `lib/server/` starts with `import 'server-only'`.** No exceptions, including the new `lib/server/request/` modules.
+- **A step that needs `npm run dev` and a browser is not yours to run.** Do the code, run lint and tsc, commit, and list the browser checks you could not perform in your report under a heading `Owed to Gabi`, copied verbatim from the task's steps. Do not stall waiting for them and do not claim them as passed. The controller batches them for Gabi.
 - **Documentation, comments and copy are English only.**
 - **Comments explain why, not what.** The codebase's existing docblocks are the register to match: they name the alternative that was rejected and the reason. Do not add narration.
 - **No new dependencies.** Everything needed is installed.
@@ -172,11 +175,13 @@ Task 2 deletes the `checkout.ts` one. The `auth.ts` one stays — it explains wh
 
 - [ ] **Step 5: Lint and build**
 
-Ask Gabi to run:
+Run:
 ```bash
-npm run lint && npm run build
+npm run lint && npx tsc --noEmit
 ```
-Expected: both pass. A failure here is a missed import path, not a logic error.
+Expected: both clean.
+
+Then note in your report that `npm run build` is still owed — Gabi runs it. A failure here is a missed import path, not a logic error.
 
 - [ ] **Step 6: Commit**
 
@@ -524,9 +529,14 @@ lib/server/auth.ts:26:  // auth cookies via next/headers.
 
 Run:
 ```bash
-grep -rn "after(" lib --include=*.ts --include=*.tsx | grep -v "lib/server/request/background.ts"
+grep -rn "from 'next/server'" lib
 ```
-Expected: no output. `after()` exists in exactly one module.
+Expected: exactly one hit,
+`lib/server/request/background.ts:3:import { after } from 'next/server'`.
+
+Grep the import, not `after(` — the latter matches the prose comments in
+`checkout.ts` and `request/checkout.ts` that say a module does *not* call it, and
+those comments are mandated by this plan. The import is the invariant.
 
 - [ ] **Step 9: Document the rule in CLAUDE.md**
 
@@ -555,11 +565,13 @@ path becomes `lib/server/request/session.ts`.
 
 - [ ] **Step 10: Lint and build**
 
-Ask Gabi to run:
+Run:
 ```bash
-npm run lint && npm run build
+npm run lint && npx tsc --noEmit
 ```
-Expected: both pass.
+Expected: both clean.
+
+Then note in your report that `npm run build` is still owed — Gabi runs it.
 
 - [ ] **Step 11: Verify a checkout still produces exactly one receipt**
 
@@ -770,7 +782,11 @@ Ask Gabi to run `npm run dev`, then check:
 
 - [ ] **Step 5: Lint**
 
-Ask Gabi to run `npm run lint`. Expected: passes.
+Run:
+```bash
+npm run lint && npx tsc --noEmit
+```
+Expected: both clean.
 
 - [ ] **Step 6: Commit**
 
@@ -976,7 +992,11 @@ Ask Gabi to run `npm run dev`, then check:
 
 - [ ] **Step 4: Lint**
 
-Ask Gabi to run `npm run lint`. Expected: passes.
+Run:
+```bash
+npm run lint && npx tsc --noEmit
+```
+Expected: both clean.
 
 - [ ] **Step 5: Commit**
 
@@ -1122,9 +1142,25 @@ export async function sendOrderEmails(purchases: Purchase[]): Promise<void> {
     else bySeller.set(purchase.sellerId, [purchase])
   }
 
-  const sellerEmails = await getUserEmails([...bySeller.keys()])
-
+  // Queued before the lookup is awaited, deliberately. A transient database
+  // error resolving seller addresses must not take the receipt down with it —
+  // allSettled below isolates a bad address and a failed send, but it cannot
+  // isolate the query that feeds it.
   const sends: Promise<void>[] = [sendReceiptEmail(purchases)]
+
+  let sellerEmails: Map<string, string>
+  try {
+    sellerEmails = await getUserEmails([...bySeller.keys()])
+  } catch (error) {
+    // An empty Map sends every seller through the missing-address branch below,
+    // which already logs and skips one at a time. So this degrades to "receipt
+    // sent, notifications skipped, logged" rather than aborting.
+    console.error(
+      `[email] seller address lookup failed for order ${first.orderId}`,
+      error,
+    )
+    sellerEmails = new Map()
+  }
 
   for (const [sellerId, rows] of bySeller) {
     const to = sellerEmails.get(sellerId)
@@ -1191,11 +1227,13 @@ subject `You made 2 sales` listing both products. Not two seller mails.
 
 - [ ] **Step 6: Lint and build**
 
-Ask Gabi to run:
+Run:
 ```bash
-npm run lint && npm run build
+npm run lint && npx tsc --noEmit
 ```
-Expected: both pass.
+Expected: both clean.
+
+Then note in your report that `npm run build` is still owed — Gabi runs it.
 
 - [ ] **Step 7: Document it in CLAUDE.md**
 
@@ -1410,7 +1448,11 @@ that does not overflow the 560px container.
 
 - [ ] **Step 5: Lint**
 
-Ask Gabi to run `npm run lint`. Expected: passes.
+Run:
+```bash
+npm run lint && npx tsc --noEmit
+```
+Expected: both clean.
 
 - [ ] **Step 6: Commit**
 
@@ -1601,11 +1643,13 @@ and move on.
 
 - [ ] **Step 6: Lint and build**
 
-Ask Gabi to run:
+Run:
 ```bash
-npm run lint && npm run build
+npm run lint && npx tsc --noEmit
 ```
-Expected: both pass.
+Expected: both clean.
+
+Then note in your report that `npm run build` is still owed — Gabi runs it.
 
 - [ ] **Step 7: Commit**
 
@@ -2016,11 +2060,13 @@ Ask Gabi to run `npm run dev`, then:
 
 - [ ] **Step 9: Lint and build**
 
-Ask Gabi to run:
+Run:
 ```bash
-npm run lint && npm run build
+npm run lint && npx tsc --noEmit
 ```
-Expected: both pass.
+Expected: both clean.
+
+Then note in your report that `npm run build` is still owed — Gabi runs it.
 
 - [ ] **Step 10: Commit**
 
@@ -2394,11 +2440,13 @@ Append a section:
 
 - [ ] **Step 10: Lint and build**
 
-Ask Gabi to run:
+Run:
 ```bash
-npm run lint && npm run build
+npm run lint && npx tsc --noEmit
 ```
-Expected: both pass.
+Expected: both clean.
+
+Then note in your report that `npm run build` is still owed — Gabi runs it.
 
 - [ ] **Step 11: Final boundary check**
 
@@ -2406,13 +2454,14 @@ Run:
 ```bash
 grep -rn "next/headers\|next/navigation\|next/cache\|next/server" lib/server --exclude-dir=request
 ```
-Expected: exactly one hit, the prose comment in `lib/server/auth.ts:26`.
+Expected: exactly one hit, the `nextCookies()` prose comment in `lib/server/auth.ts`.
 
 Run:
 ```bash
-grep -rn "after(" lib --include=*.ts --include=*.tsx | grep -v "lib/server/request/background.ts"
+grep -rn "from 'next/server'" lib
 ```
-Expected: no output.
+Expected: exactly one hit, the `after` import in
+`lib/server/request/background.ts`.
 
 - [ ] **Step 12: Commit**
 

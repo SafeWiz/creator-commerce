@@ -10,10 +10,10 @@ import {
   ShieldCheck,
 } from "lucide-react"
 
-import { readCartMembership } from "@/lib/server/cart"
+import { readCartMembership } from "@/lib/server/request/cart"
 import { getStorefrontProduct } from "@/lib/server/dal/products"
 import { getUserByHandle } from "@/lib/server/dal/users"
-import { getUser } from "@/lib/server/session"
+import { getUser } from "@/lib/server/request/session"
 import { AddToCartButton } from "@/components/add-to-cart-button"
 import { DraftBadge } from "@/components/product-card"
 import { ProductGallery } from "@/components/product-gallery"

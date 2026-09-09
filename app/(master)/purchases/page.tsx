@@ -3,7 +3,7 @@ import Link from "next/link"
 import { Download } from "lucide-react"
 
 import { getBuyerPurchases } from "@/lib/server/dal/purchases"
-import { requireUser } from "@/lib/server/session"
+import { requireUser } from "@/lib/server/request/session"
 import { TableCard } from "@/components/table-card"
 import { Button } from "@/components/ui/button"
 import {
