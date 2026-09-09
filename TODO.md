@@ -183,31 +183,23 @@ ordered by `createdAt`, top 50, no pagination. Three known limits:
 
 ## Purchases
 
-- **Dashboard KPIs are still mock.** Revenue, Units sold and Products can all be
-  derived now (`getSellerTotals` already computes the first two); Conversion
-  cannot, because there is no pageview or analytics table anywhere.
+- **Conversion has no data source.** The dashboard's fourth KPI renders an em
+  dash. Revenue, Units sold and Products are windowed reads now
+  (`getSellerPeriodTotals`, `getSellerProductCounts`), but conversion needs a
+  denominator — storefront pageviews — and nothing anywhere counts them.
 
-  The decision that was waiting: derive what is derivable and render the rest as
-  an **honest empty state** rather than deleting the block or faking it. A
-  deleted card says nothing to the user or to the next developer; a fabricated
-  number is worse than both. Same rule for the onboarding checklist, where two of
-  five items ("Connect Stripe" — Connect does not exist; "Share your storefront
-  link" — nothing tracks it) are unknowable. That makes the checklist a
-  three-state control, not a two-state one: done, not done, unknown. An unchecked
-  box is a claim about the user, and where the truth is "we cannot know" that
-  claim is false.
+  The card stays rather than being deleted, because a missing card says nothing
+  to the user or to the next developer while a fabricated percentage is worse
+  than both. When it fills it fills from third-party analytics (Plausible,
+  PostHog, Vercel Analytics), not from a home-grown pageview table: counting
+  views correctly means handling bots, cached responses and a write per render,
+  those products have solved all three, and a number whose whole value is being
+  trustworthy is not worth shipping a worse version of.
 
-  When Conversion comes back it comes from third-party analytics (Plausible,
-  PostHog, Vercel Analytics), not a home-grown pageview table. Counting views
-  correctly means handling bots, cached responses and a write per render; those
-  products have solved all three and we would ship a worse version of a number
-  whose whole value is being trustworthy.
-
-  Also mock on that page: the greeting is hardcoded to "Gabi" for every user, and
-  the KPI cards are labelled "last 30 days" while the numbers behind them are
-  not windowed. The label is part of the claim — either query the window
-  (one 60-day scan with `filter (where ...)` gives both the window and the
-  previous one for the delta) or change the label to match.
+  The onboarding checklist that sat beside it is gone for the related reason.
+  Two of its five items were unknowable — "Connect Stripe", where Connect does
+  not exist, and "Share your storefront link", which nothing tracks — and an
+  unchecked box is a claim about the user that we could not make.
 
 - **No receipts.** The `/purchases` receipt column was removed rather than left
   as a dead link. It comes back with Stripe, which is what would generate them.
