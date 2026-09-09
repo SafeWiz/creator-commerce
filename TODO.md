@@ -333,3 +333,21 @@ ordered by `createdAt`, top 50, no pagination. Three known limits:
 - Quite a few buttons with bad state / mock data
   - sign in buttons
   - dead links
+
+## Email
+
+- **Settings notification preferences are a mockup.** The toggles on
+  `/settings` are a hardcoded `NOTIFICATIONS` array with no persistence.
+  Honouring them means a column, a migration, an action, and a check inside
+  `sendOrderEmails`. Transactional mail currently sends unconditionally.
+
+- **`requireEmailVerification` is off.** Every existing row has
+  `emailVerified: false`, so turning it on locks out every account. It needs a
+  backfill or a grace period first. The banner is the only nudge until then.
+
+- **Email change from Settings is unwired.** Better Auth's `changeEmail` and
+  `sendChangeEmailVerification` are untouched. Now cheap — the handler and the
+  template pattern both exist.
+
+- **Still no outbox.** A send that fails is logged and lost. Retries, and a
+  record of what was sent, remain the fix.

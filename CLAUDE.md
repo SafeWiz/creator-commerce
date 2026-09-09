@@ -95,6 +95,20 @@ runs the sends through `Promise.allSettled` — a seller with an unreachable
 address must not cost the buyer their receipt. The seller's copy carries no
 buyer identity.
 
+Better Auth's own mail — password reset and email verification — is composed in
+`lib/server/email/auth.tsx` and wired in `lib/server/auth.ts`. Those hooks are
+plain awaited functions; `advanced.backgroundTasks.handler` is what keeps them
+off the response path, and without it Better Auth awaits them inline. Note that
+`runInBackgroundOrAwait` swallows send failures in both of its branches, so the
+reset and signup endpoints answer `status: true` regardless — only
+`/send-verification-email` awaits and rethrows, which is why the resend button
+on `/verify-email` is the one place a send failure is reported to the user.
+
+Verification is soft: `sendOnSignUp` is on, `requireEmailVerification` is not
+set, and the banner in `DashboardShell` is the only thing that asks. Turning the
+gate on would lock out every existing row, all of which have
+`emailVerified: false`.
+
 Both credentials absent is a supported state, not a broken one: the transporter
 becomes nodemailer's `jsonTransport`, which builds the message without opening a
 socket, and `sendEmail` logs the headers and the plain-text body. So a fresh
