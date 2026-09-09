@@ -4,7 +4,7 @@ import type { NextRequest } from 'next/server'
 
 import { authPathWithNext } from '@/lib/schemas/auth'
 import { clearCart } from '@/lib/server/request/cart'
-import { fulfillCheckoutSession } from '@/lib/server/checkout'
+import { fulfillAndNotify } from '@/lib/server/request/checkout'
 import { getUser } from '@/lib/server/request/session'
 import { stripe } from '@/lib/server/stripe'
 
@@ -59,7 +59,7 @@ export async function GET(request: NextRequest) {
     redirect('/cart')
   }
 
-  await fulfillCheckoutSession(session)
+  await fulfillAndNotify(session)
 
   // The one part that *is* about this browser: the cart cookie belongs to whoever
   // is holding it, so it only gets cleared when the buyer on the session is the

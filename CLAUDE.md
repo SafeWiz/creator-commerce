@@ -18,6 +18,21 @@ Everything else directly under `lib/` is environment-agnostic and safe on both
 sides: `lib/utils.ts`, `lib/schemas/*`. `lib/actions/*` is its own case — server
 actions, marked with `'use server'`, imported by client components.
 
+**`lib/server/request/`** is the only place under `lib/server/` that may import
+`next/headers`, `next/navigation`, `next/cache` or `next/server`. Its modules
+are callable only from a route handler, a server action, or a server component;
+everything else under `lib/server/` is request-agnostic and callable from a
+script or a cron. `after()` throws outside a request scope, so this is a real
+constraint rather than a stylistic one, and it is checkable:
+
+```bash
+grep -rn "next/headers\|next/navigation\|next/cache\|next/server" lib/server --exclude-dir=request
+```
+
+It holds `session.ts` (the session helpers), `cart.ts` (the cart cookie),
+`revalidate.ts`, `background.ts` (the app's only `after()` call),
+`checkout.ts` (`fulfillAndNotify`) and `stripe-webhook.ts`.
+
 **Server actions** (`lib/actions/*`) resolve the current user, parse input, call
 a DAL function, then handle Next.js concerns (`revalidatePath`, `redirect`). They
 never query tables.
@@ -30,7 +45,7 @@ passes it in.
 - Domain rules that every caller needs (e.g. deriving a product slug from its
   name) belong in the DAL, not in the action.
 
-**Session/auth helpers** live in `lib/server/session.ts`, not the DAL. Callers
+**Session/auth helpers** live in `lib/server/request/session.ts`, not the DAL. Callers
 (actions, pages, layouts) resolve the user there and pass ids down:
 - `getUser()` is `cache()`-wrapped so repeated calls in one render pass hit the
   session once; `requireUser()` wraps it and redirects to `/login` when absent.
