@@ -2454,7 +2454,7 @@ Run:
 ```bash
 grep -rn "next/headers\|next/navigation\|next/cache\|next/server" lib/server --exclude-dir=request
 ```
-Expected: exactly one hit, the prose comment in `lib/server/auth.ts:26`.
+Expected: exactly one hit, the `nextCookies()` prose comment in `lib/server/auth.ts`.
 
 Run:
 ```bash
