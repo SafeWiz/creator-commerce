@@ -529,9 +529,14 @@ lib/server/auth.ts:26:  // auth cookies via next/headers.
 
 Run:
 ```bash
-grep -rn "after(" lib --include=*.ts --include=*.tsx | grep -v "lib/server/request/background.ts"
+grep -rn "from 'next/server'" lib
 ```
-Expected: no output. `after()` exists in exactly one module.
+Expected: exactly one hit,
+`lib/server/request/background.ts:3:import { after } from 'next/server'`.
+
+Grep the import, not `after(` — the latter matches the prose comments in
+`checkout.ts` and `request/checkout.ts` that say a module does *not* call it, and
+those comments are mandated by this plan. The import is the invariant.
 
 - [ ] **Step 9: Document the rule in CLAUDE.md**
 
@@ -2437,9 +2442,10 @@ Expected: exactly one hit, the prose comment in `lib/server/auth.ts:26`.
 
 Run:
 ```bash
-grep -rn "after(" lib --include=*.ts --include=*.tsx | grep -v "lib/server/request/background.ts"
+grep -rn "from 'next/server'" lib
 ```
-Expected: no output.
+Expected: exactly one hit, the `after` import in
+`lib/server/request/background.ts`.
 
 - [ ] **Step 12: Commit**
 
