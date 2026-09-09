@@ -3,9 +3,9 @@ import { redirect } from 'next/navigation'
 import type { NextRequest } from 'next/server'
 
 import { authPathWithNext } from '@/lib/schemas/auth'
-import { clearCart } from '@/lib/server/cart'
+import { clearCart } from '@/lib/server/request/cart'
 import { fulfillCheckoutSession } from '@/lib/server/checkout'
-import { getUser } from '@/lib/server/session'
+import { getUser } from '@/lib/server/request/session'
 import { stripe } from '@/lib/server/stripe'
 
 /**

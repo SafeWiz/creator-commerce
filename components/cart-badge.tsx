@@ -1,7 +1,7 @@
 import Link from "next/link"
 import { ShoppingCart } from "lucide-react"
 
-import { readCartIds } from "@/lib/server/cart"
+import { readCartIds } from "@/lib/server/request/cart"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 

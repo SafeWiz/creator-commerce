@@ -3,7 +3,7 @@ import Link from "next/link"
 import { Copy, Pencil, Plus, Search, Trash2 } from "lucide-react"
 
 import { getUserProducts } from "@/lib/server/dal/products"
-import { requireUser } from "@/lib/server/session"
+import { requireUser } from "@/lib/server/request/session"
 import { formatPrice } from "@/lib/currency"
 import { DeleteProductButton } from "@/components/delete-product-button"
 import { TableCard } from "@/components/table-card"
