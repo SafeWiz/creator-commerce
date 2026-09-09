@@ -87,6 +87,14 @@ over one nodemailer transporter picked at module load by
   alias on that account, so setting a domain address without adding it as an
   alias fails silently rather than erroring.
 
+A paid order produces one receipt for the buyer and one notification per seller.
+`sendOrderEmails` in `lib/server/email/order.ts` groups the promoted purchase
+rows by `sellerId` so a three-product order from one seller is one email rather
+than three, resolves every seller address in a single `getUserEmails` query, and
+runs the sends through `Promise.allSettled` — a seller with an unreachable
+address must not cost the buyer their receipt. The seller's copy carries no
+buyer identity.
+
 Both credentials absent is a supported state, not a broken one: the transporter
 becomes nodemailer's `jsonTransport`, which builds the message without opening a
 socket, and `sendEmail` logs the headers and the plain-text body. So a fresh
