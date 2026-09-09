@@ -2,6 +2,13 @@ import { z } from 'zod'
 
 export const DEFAULT_POST_AUTH_PATH = '/dashboard'
 
+/**
+ * Better Auth's minPasswordLength default. Both password forms read it so the
+ * browser's own validation and the server agree, and so changing that option
+ * has one place to follow.
+ */
+export const PASSWORD_MIN_LENGTH = 8
+
 const MAX_NEXT_PATH_LENGTH = 256
 
 // Any origin will do — it is never used as a destination, only as something for
