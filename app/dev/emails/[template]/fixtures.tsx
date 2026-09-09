@@ -1,7 +1,12 @@
 import type { ReactElement } from 'react'
 
+import {
+  PasswordResetEmail,
+  passwordResetSubject,
+} from '@/components/email/password-reset'
 import { ReceiptEmail, receiptSubject } from '@/components/email/receipt'
 import { SaleEmail, saleSubject } from '@/components/email/sale'
+import { VerifyEmail, verifyEmailSubject } from '@/components/email/verify-email'
 
 /**
  * Every template the dev preview can render, and the data it renders with.
@@ -78,6 +83,24 @@ export const TEMPLATES: Record<string, EmailFixture> = {
           },
           { productId: 3, productName: 'Free sample pack', priceInCents: 0 },
         ]}
+      />
+    ),
+  },
+  'password-reset': {
+    subject: passwordResetSubject(),
+    element: (
+      <PasswordResetEmail
+        name="Gabi"
+        url={`${APP_URL}/api/auth/reset-password/dGhpcy1pcy1hLWZha2UtdG9rZW4?callbackURL=%2Freset-password`}
+      />
+    ),
+  },
+  'verify-email': {
+    subject: verifyEmailSubject(),
+    element: (
+      <VerifyEmail
+        name="Gabi"
+        url={`${APP_URL}/api/auth/verify-email?token=dGhpcy1pcy1hLWZha2UtdG9rZW4&callbackURL=%2Fverify-email`}
       />
     ),
   },
