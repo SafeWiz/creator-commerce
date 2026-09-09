@@ -488,8 +488,9 @@ Better Auth spends a dummy lookup to suppress.
 
 Reads `token` and `error` from `searchParams`. With `error` or no token: the
 expired-link message and a link to `/forgot-password`. With a token: new
-password plus confirmation, validated against the shared `passwordSchema`,
-submitted through `authClient.resetPassword`, then `router.push('/login')`.
+password plus confirmation, `minLength={PASSWORD_MIN_LENGTH}` on the input and a
+mismatch check before submit, then `authClient.resetPassword` and
+`router.push('/login')`.
 
 ### 15. `app/(auth)/verify-email/page.tsx` + `verify-email-view.tsx` (new)
 
@@ -530,13 +531,18 @@ Renders a banner above `children` when `!user.emailVerified`, linking to
 ### 18. `lib/schemas/auth.ts` (edited)
 
 ```ts
-export const passwordSchema: z.ZodString  // min 8
+export const PASSWORD_MIN_LENGTH = 8
 ```
 
-Used by the signup form and the reset form. Signup currently enforces only
-`required`, so a short password fails server-side with Better Auth's raw error
-string. Eight matches Better Auth's `minPasswordLength` default, so client and
-server agree.
+A constant, not a zod schema. Both auth forms are uncontrolled and validate
+natively — `minLength`, `pattern`, `required` — with no resolver anywhere, so a
+schema would be the only one of its kind and would not be reached by the browser
+validation that actually gates submission.
+
+`signup-form.tsx` already hardcodes `minLength={8}`; it and the new reset form
+both read the constant instead. Eight matches Better Auth's `minPasswordLength`
+default, so client and server agree, and a change to that option has one place
+to follow.
 
 ### 19. `app/dev/emails/[template]/fixtures.tsx` (new) and `route.tsx` (edited)
 
