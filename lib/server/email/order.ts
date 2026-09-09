@@ -22,6 +22,12 @@ import { sendSaleEmail } from './sale'
  * independent obligations, and `all` would abandon the rest on the first
  * rejection — one seller with a malformed address costing the buyer their
  * receipt.
+ *
+ * The receipt is queued before the seller-address lookup is awaited, and a
+ * failed lookup is caught rather than left to reject the function: either way
+ * would put the lookup ahead of the receipt in the failure path, and a
+ * seller-side problem — even one in resolving where to send the seller
+ * notifications — must not be able to take the buyer's receipt down with it.
  */
 export async function sendOrderEmails(purchases: Purchase[]): Promise<void> {
   const [first] = purchases
@@ -34,9 +40,18 @@ export async function sendOrderEmails(purchases: Purchase[]): Promise<void> {
     else bySeller.set(purchase.sellerId, [purchase])
   }
 
-  const sellerEmails = await getUserEmails([...bySeller.keys()])
-
   const sends: Promise<void>[] = [sendReceiptEmail(purchases)]
+
+  let sellerEmails: Map<string, string>
+  try {
+    sellerEmails = await getUserEmails([...bySeller.keys()])
+  } catch (error) {
+    console.error(
+      `[email] seller address lookup failed for order ${first.orderId}`,
+      error,
+    )
+    sellerEmails = new Map()
+  }
 
   for (const [sellerId, rows] of bySeller) {
     const to = sellerEmails.get(sellerId)
