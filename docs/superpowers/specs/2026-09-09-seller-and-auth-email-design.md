@@ -399,7 +399,6 @@ and the `.catch` it never owned now lives in `scheduleEmail`.
 
 ```ts
 export async function sendSaleEmail(params: {
-  sellerId: string
   to: string
   orderId: string
   items: SaleItem[]
@@ -407,7 +406,10 @@ export async function sendSaleEmail(params: {
 ```
 
 Mirrors `receipt.tsx`: resolves nothing it can be handed, composes the element,
-calls `sendEmail`.
+calls `sendEmail`. It takes the address rather than a `sellerId` — unlike
+`sendReceiptEmail`, which looks its buyer up — because the caller has already
+resolved every seller in the order in one query, and re-resolving here would
+undo that.
 
 ### 8. `lib/server/email/auth.tsx` (new)
 
