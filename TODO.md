@@ -294,14 +294,14 @@ ordered by `createdAt`, top 50, no pagination. Three known limits:
   template pattern both exist.
 
 - **Still no outbox.** A send that fails is logged and lost. `scheduleEmail`
-  (`lib/server/request/background.ts`) swallows the failure rather than letting
-  it escape `after()`, and that is deliberate: a dead SMTP connection reaching
-  the webhook as a throw would 500 it, and Stripe would retry for three days
-  against an order whose rows are already promoted — the retry's
-  `markCheckoutSessionPaid` matches nothing and returns `[]`, so nothing is
-  gained and the order looks broken when it isn't. Swallowing is the same trade
-  already made for `deleteUploadedFiles` — the operation the user cares about
-  succeeded, and failing it because a side effect failed would be worse.
+  (`lib/server/request/background.ts`) catches the failure rather than letting
+  it escape the task passed to `after()`, but that catch is not what protects the
+  webhook — `after()` already runs past the response and Next catches whatever a
+  task throws itself, so nothing here can turn into a 500 either way. What the
+  catch buys is a log line naming the order, in place of Next's bare "A promise
+  passed to `after()` rejected". Swallowing there and just logging is the same
+  trade already made for `deleteUploadedFiles` — the operation the user cares
+  about succeeded, and failing it because a side effect failed would be worse.
   Retries, and a record of what was sent, remain the fix; it also answers Gmail's
   1-3s SMTP handshake happening inside a webhook Stripe is timing, so it is one
   piece of work, not two.

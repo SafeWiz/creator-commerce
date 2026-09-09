@@ -629,7 +629,9 @@ Manual, since the project has no test harness:
 
 1. `npm run lint` and a build pass.
 2. `grep -rn "next/headers\|next/navigation\|next/cache\|next/server" lib/server
-   --exclude-dir=request` returns nothing.
+   --exclude-dir=request` returns exactly one line — a comment in
+   `lib/server/auth.ts` explaining why `nextCookies()` must be the last
+   plugin, which mentions `next/headers` in prose — and no imports.
 3. `/dev/emails` lists four templates; each renders; `?send=` on each logs a
    complete message with no credentials in the output.
 4. A checkout of two products from two different sellers produces three console

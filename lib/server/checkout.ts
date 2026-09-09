@@ -85,6 +85,29 @@ export async function createCheckoutSession(params: {
 }
 
 /**
+ * Sweeps a session's leftover pending rows without letting the sweep itself
+ * fail the caller.
+ *
+ * Both call sites in fulfillCheckoutSession reach this after the session's rows
+ * are already promoted (or, on the duplicate-purchase path, already owned
+ * through another session) — a throw here would 500 the webhook for a session
+ * whose real work is done, buying nothing but the pointless Stripe retries the
+ * comments in this file already argue against. Losing the sweep only leaves a
+ * dead pending row behind; the NOT EXISTS guard in markCheckoutSessionPaid means
+ * that row can never be re-promoted.
+ */
+async function sweepPendingRows(sessionId: string): Promise<void> {
+  try {
+    await deletePendingCheckoutSession(sessionId)
+  } catch (error) {
+    console.error(
+      `[checkout] sweep failed for session ${sessionId} — dead pending rows left behind`,
+      error,
+    )
+  }
+}
+
+/**
  * The one place a paid session becomes owned products.
  *
  * Promote first, sweep second. The other order looks equivalent and isn't: a
@@ -121,22 +144,11 @@ export async function fulfillCheckoutSession(
     console.error(
       `[checkout] duplicate purchase in session ${session.id} — the buyer paid for something they already own and needs a refund for that line`,
     )
-    await deletePendingCheckoutSession(session.id)
+    await sweepPendingRows(session.id)
     return []
   }
 
-  // Tolerable to fail: it only leaves a dead pending row, and the NOT EXISTS
-  // guard means that row can never be re-promoted. Losing the order's mail to it
-  // would not be tolerable — the caller schedules that off `promoted`, so a
-  // throw here would take the receipt and every seller notification with it.
-  try {
-    await deletePendingCheckoutSession(session.id)
-  } catch (error) {
-    console.error(
-      `[checkout] sweep failed for session ${session.id} — dead pending rows left behind`,
-      error,
-    )
-  }
+  await sweepPendingRows(session.id)
 
   return promoted
 }
