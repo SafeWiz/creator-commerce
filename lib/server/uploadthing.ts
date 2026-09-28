@@ -122,6 +122,7 @@ export const uploadRouter = {
         key: file.key,
         name: file.name,
         sizeBytes: file.size,
+        mimeType: file.type,
       })
 
       // The key is all the form needs: it submits that, and the create action

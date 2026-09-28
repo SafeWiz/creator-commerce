@@ -40,6 +40,9 @@ export const productsTable = pgTable(
     fileKey: varchar('file_key', { length: 255 }),
     fileName: varchar('file_name', { length: 255 }),
     fileSizeBytes: integer('file_size_bytes'),
+    // Copied from product_uploads when the product claims its file. See the
+    // comment there on what it is — and is not.
+    mimeType: varchar('mime_type', { length: 255 }),
     // Cents, so Stripe and the DB agree and no decimal rounding creeps in.
     priceInCents: integer('price_in_cents').notNull(),
     // The app is single-currency (lib/currency.ts) and nothing writes this
@@ -119,6 +122,12 @@ export const productUploadsTable = pgTable(
     // browser announced them beforehand.
     name: varchar({ length: 255 }).notNull(),
     sizeBytes: integer('size_bytes').notNull(),
+    // As the browser declared it (`file.type`), which it derives from the
+    // extension. Never checked against the bytes: a renamed file lies. It is
+    // only used to decide how the AI reads the file, where a wrong value costs
+    // a failed generation and nothing else. Null for rows older than the
+    // column.
+    mimeType: varchar('mime_type', { length: 255 }),
     createdAt: timestamp('created_at').defaultNow().notNull(),
   },
   (table) => [

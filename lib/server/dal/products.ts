@@ -57,10 +57,17 @@ export async function recordProductUpload(input: {
   key: string
   name: string
   sizeBytes: number
+  // The browser's declaration, unchecked — see product_uploads.mime_type.
+  mimeType: string
 }): Promise<void> {
   await db
     .insert(productUploadsTable)
-    .values({ ...input, name: input.name.slice(0, 255) })
+    .values({
+      ...input,
+      name: input.name.slice(0, 255),
+      // An empty string is what a browser sends when it has no idea.
+      mimeType: input.mimeType.slice(0, 255) || null,
+    })
     .onConflictDoNothing({ target: productUploadsTable.key })
 }
 
@@ -82,6 +89,44 @@ export async function recordProductImageUpload(input: {
     .onConflictDoNothing({ target: productImageUploadsTable.key })
 }
 
+export type OwnedUpload = {
+  key: string
+  name: string
+  sizeBytes: number
+  mimeType: string | null
+}
+
+/**
+ * An uploaded product file, if it belongs to this owner.
+ *
+ * Reads product_uploads rather than products because the row outlives the
+ * claim: the create form has an upload and no product yet, the edit form has
+ * both, and this one lookup serves either. Owner-scoped, so a key belonging to
+ * someone else finds nothing.
+ */
+export async function getOwnedUpload(
+  ownerId: string,
+  key: string,
+): Promise<OwnedUpload | null> {
+  const [upload] = await db
+    .select({
+      key: productUploadsTable.key,
+      name: productUploadsTable.name,
+      sizeBytes: productUploadsTable.sizeBytes,
+      mimeType: productUploadsTable.mimeType,
+    })
+    .from(productUploadsTable)
+    .where(
+      and(
+        eq(productUploadsTable.key, key),
+        eq(productUploadsTable.ownerId, ownerId),
+      ),
+    )
+    .limit(1)
+
+  return upload ?? null
+}
+
 /**
  * Creates a product from a file its owner has already uploaded.
  *
@@ -100,17 +145,7 @@ export async function createProduct({
   fileKey,
   ...fields
 }: CreateProductInput): Promise<Product | null> {
-  const [upload] = await db
-    .select()
-    .from(productUploadsTable)
-    .where(
-      and(
-        eq(productUploadsTable.key, fileKey),
-        eq(productUploadsTable.ownerId, fields.ownerId),
-      ),
-    )
-    .limit(1)
-
+  const upload = await getOwnedUpload(fields.ownerId, fileKey)
   if (!upload) return null
 
   const [product] = await db
@@ -121,6 +156,7 @@ export async function createProduct({
       fileKey: upload.key,
       fileName: upload.name,
       fileSizeBytes: upload.sizeBytes,
+      mimeType: upload.mimeType,
     })
     .returning()
 
