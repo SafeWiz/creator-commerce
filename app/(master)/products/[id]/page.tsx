@@ -30,11 +30,17 @@ export default async function EditProductPage({
       action={updateProductAction.bind(null, id)}
       productId={product.id}
       images={product.images}
-      // Both columns are written together or not at all, so either the product
-      // has a file or it predates them.
+      // All three columns are written together or not at all, so either the
+      // product has a file or it predates them.
       file={
-        product.fileName != null && product.fileSizeBytes != null
-          ? { name: product.fileName, sizeBytes: product.fileSizeBytes }
+        product.fileKey != null &&
+        product.fileName != null &&
+        product.fileSizeBytes != null
+          ? {
+              key: product.fileKey,
+              name: product.fileName,
+              sizeBytes: product.fileSizeBytes,
+            }
           : undefined
       }
       product={{

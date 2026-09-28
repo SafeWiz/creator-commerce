@@ -1,17 +1,18 @@
 "use client"
 
-import { useActionState, useEffect, useRef, useState, startTransition } from "react"
+import { useActionState, useCallback, useEffect, useRef, useState, startTransition } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import type { z } from "zod"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { ChevronLeft, Trash2 } from "lucide-react"
+import { ChevronLeft, Sparkles, Square, Trash2, Undo2 } from "lucide-react"
 
 import { discardStagedImagesAction, type ProductFormState } from "@/lib/actions/products"
 import { APP_CURRENCY } from "@/lib/currency"
 import { MAX_PRODUCT_IMAGES, createProductSchema } from "@/lib/schemas/product"
 import { DeleteProductButton } from "@/components/delete-product-button"
+import { useDescriptionGenerator } from "@/components/description-generator"
 import {
   ProductFileField,
   ProductFileSummary,
@@ -64,7 +65,7 @@ export function ProductForm({
   images?: string[]
   // The product's digital file, when editing. Absent for a new product, which
   // uploads one here, and for the rows that predate the feature.
-  file?: { name: string; sizeBytes: number }
+  file?: { key: string; name: string; sizeBytes: number }
 }) {
   const isNew = !product
   const [state, formAction, isPending] = useActionState(action, {})
@@ -149,6 +150,7 @@ export function ProductForm({
     register,
     handleSubmit,
     setValue,
+    getValues,
     setError,
     formState: { errors },
   } = useForm<FormValues>({
@@ -159,6 +161,22 @@ export function ProductForm({
       price: product?.price ?? "",
       status: product?.status ?? "draft",
     },
+  })
+
+  // The file the model reads: on create, whatever was just uploaded; on edit,
+  // the product's own. Null until one exists, which disables the button.
+  const fileKey = isNew ? upload.fileKey : (file?.key ?? null)
+
+  const setDescription = useCallback(
+    (text: string) => setValue("description", text, { shouldDirty: true }),
+    [setValue],
+  )
+
+  const describer = useDescriptionGenerator({
+    fileKey,
+    getName: () => getValues("name"),
+    getDescription: () => getValues("description") ?? "",
+    setDescription,
   })
 
   // Surface server-side validation (e.g. rules the client can't check) back
@@ -249,14 +267,16 @@ export function ProductForm({
           <Button
             type="submit"
             variant="outline"
-            disabled={isPending || upload.isUploading}
+            // Mid-stream, a save would store half a description.
+            disabled={isPending || upload.isUploading || describer.isLoading}
             onClick={(event) => submitWith("draft")(event)}
           >
             Save draft
           </Button>
           <Button
             type="submit"
-            disabled={isPending || upload.isUploading}
+            // Mid-stream, a save would store half a description.
+            disabled={isPending || upload.isUploading || describer.isLoading}
             onClick={(event) => submitWith("published")(event)}
           >
             Publish
@@ -298,13 +318,46 @@ export function ProductForm({
             )}
           </div>
           <div className="grid gap-1.5">
-            <Label htmlFor="description">Description</Label>
+            <div className="flex items-center justify-between gap-2">
+              <Label htmlFor="description">Description</Label>
+              <div className="flex items-center gap-1.5">
+                {describer.canUndo && !describer.isLoading && (
+                  <Button type="button" variant="ghost" size="sm" onClick={describer.undo}>
+                    <Undo2 /> Undo
+                  </Button>
+                )}
+                {describer.isLoading ? (
+                  <Button type="button" variant="outline" size="sm" onClick={describer.stop}>
+                    <Square /> Stop
+                  </Button>
+                ) : (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={!fileKey}
+                    onClick={describer.generate}
+                  >
+                    <Sparkles /> Generate with AI
+                  </Button>
+                )}
+              </div>
+            </div>
             <Textarea
               id="description"
               placeholder="Describe what buyers get…"
+              readOnly={describer.isLoading}
               aria-invalid={!!errors.description}
               {...register("description")}
             />
+            {!fileKey && (
+              <p className="text-xs text-muted-foreground">
+                Upload the file first to generate a description from it.
+              </p>
+            )}
+            {describer.error && (
+              <p className="text-sm text-destructive">{describer.error}</p>
+            )}
             {errors.description && (
               <p className="text-sm text-destructive">
                 {errors.description.message}
