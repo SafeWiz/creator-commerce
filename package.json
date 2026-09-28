@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "ai:hello": "tsx --conditions=react-server --env-file-if-exists=.env.local scripts/ai-hello.mts",
     "schema:better-auth": "tsx --conditions=react-server --env-file-if-exists=.env.local scripts/generate-auth-schema.mts",
     "schema:migrations:generate": "npx drizzle-kit generate",
     "schema:migrations:run": "npx drizzle-kit migrate",
@@ -15,6 +16,7 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@ai-sdk/react": "^4.0.121",
     "@base-ui/react": "^1.6.0",
     "@hookform/resolvers": "^5.4.0",
     "@neondatabase/serverless": "^1.1.0",
@@ -23,6 +25,7 @@
     "@uploadthing/react": "^7.3.3",
     "@vercel/analytics": "^2.0.1",
     "@vercel/speed-insights": "^2.0.0",
+    "ai": "^7.0.118",
     "better-auth": "^1.6.23",
     "class-variance-authority": "^0.7.1",
     "client-only": "^0.0.1",
