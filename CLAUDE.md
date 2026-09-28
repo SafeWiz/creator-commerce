@@ -49,8 +49,8 @@ grep -rn "server/request" lib/server --include='*.ts' --include='*.tsx' | grep -
 
 `request/` itself holds `session.ts` (the session helpers), `cart.ts` (the cart
 cookie), `revalidate.ts`, `background.ts` (the app's only `after()` call),
-`checkout.ts` (`fulfillAndNotify`), `stripe-webhook.ts` and
-`cleanup-images-cron.ts`.
+`checkout.ts` (`fulfillAndNotify`), `stripe-webhook.ts`,
+`cleanup-images-cron.ts` and `describe-product.ts`.
 
 **Server actions** (`lib/actions/*`) resolve the current user, parse input, call
 a DAL function, then handle Next.js concerns (`revalidatePath`, `redirect`). They
@@ -314,3 +314,36 @@ Migrations run from a laptop, never from the build:
 `PG_CONNECTION_STRING=<production string> npm run schema:migrations:run`.
 `vercel env pull` writes `.env.local`, which `next dev` loads ahead of `.env`
 — pull only when that override is wanted.
+
+# AI
+
+"Generate with AI" on the product form streams a description of the product's
+file. `POST /api/products/describe` (handler in
+`lib/server/request/describe-product.ts`) checks the session, that the
+upload's key belongs to the caller (`getOwnedUpload`, which reads
+`product_uploads` so it serves both the create and the edit form), and the
+daily cap, then returns `streamText(...).toTextStreamResponse()`. The form
+reads it with `useCompletion` (`components/description-generator.tsx`) and
+mirrors it into the field. Nothing is saved until the form's Save.
+
+`lib/server/ai/product-description.ts` holds everything about the models:
+`DESCRIPTION_MODEL` (Qwen: images and facts-only) and `PDF_DESCRIPTION_MODEL`
+(Gemini: PDFs, which Qwen rejects with "Only image file parts are
+supported"), both AI Gateway ids; `descriptionModelFor`, the only place that
+picks between them; `MAX_AI_FILE_BYTES`, `DAILY_GENERATION_LIMIT`, and the
+instructions. It imports nothing from `request/`, and takes the model as a
+parameter so tests can pass a mock.
+
+The model is sent the file only for PDFs and common image types under the
+size cap; everything else is described from the facts (name, file name, type,
+size). The type is `product_uploads.mime_type`, which is the browser's
+declaration and is never checked — a renamed file produces a failed
+generation, nothing worse.
+
+The cap is a count of `ai_generations` rows in the last 24h, written before
+the model is called so failures count. Each row records which of the two
+models the click went to.
+
+Gateway auth: OIDC on Vercel, no variable. Locally `AI_GATEWAY_API_KEY` in
+`.env.local`. `npm run ai:hello -- [file]` talks to the models from the
+terminal, routed by file type the same way.

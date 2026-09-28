@@ -322,3 +322,18 @@ ordered by `createdAt`, top 50, no pagination. Three known limits:
   Retries, and a record of what was sent, remain the fix; it also answers Gmail's
   1-3s SMTP handshake happening inside a webhook Stripe is timing, so it is one
   piece of work, not two.
+
+## AI
+
+- **ZIP files are described from their name only.** Listing the archive's
+  entries and sending them as text would give the model something real to
+  describe. Needs a zip library and a size cap on the download.
+- **PDFs could show a table of contents on the product page.** Extracted by
+  the model from the document — real content that is safe to show, and what a
+  buyer of an ebook or course wants to see before paying.
+- **The mime type is the browser's word for it.** Sniffing the first bytes in
+  `onUploadComplete` (a `Range` request and the `file-type` package) would
+  make it a measured value, like the file size already is.
+- **Two models where one would do.** Qwen rejects PDFs, so they go to Gemini.
+  A single model that reads both, within the free credits, would remove
+  `descriptionModelFor` and the second constant.
