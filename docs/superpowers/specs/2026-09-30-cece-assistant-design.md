@@ -95,12 +95,17 @@ Import rules, written into CLAUDE.md:
 ```ts
 export type ToolContext = { userId: string }
 
-export type CeceTool<Input, Output> = {
+export type CeceTool<Schema extends z.ZodType = z.ZodType, Output = unknown> = {
   name: string              // snake_case, stable: MCP clients will depend on it
   description: string       // written for a model deciding whether to call
-  inputSchema: z.ZodType<Input>
-  execute: (ctx: ToolContext, input: Input) => Promise<Output>
+  inputSchema: Schema
+  // Method syntax: bivariant input, so specific tools fit in CeceTool[].
+  execute(ctx: ToolContext, input: z.output<Schema>): Promise<Output>
 }
+
+export function defineTool<Schema extends z.ZodType, Output>(
+  tool: CeceTool<Schema, Output>,
+): CeceTool<Schema, Output>
 ```
 
 Outputs are JSON-serializable, bounded (every list has a hard cap), and carry
@@ -125,8 +130,8 @@ which tools exist.
 | `search_marketplace` | `query`, `sort?` | ≤10: name, price, seller handle, public link, description truncated to 200 chars | `searchPublishedProducts` |
 | `get_help_topic` | `topic` (enum) | markdown for that topic | `HELP_TOPICS` |
 
-`get_my_product` returns `null` for an id the user does not own — the same
-answer as an id that does not exist.
+`get_my_product` returns `{ found: false, message }` for an id the user does
+not own — the same answer as an id that does not exist.
 
 New DAL functions, all owner-scoped by parameter:
 
@@ -163,8 +168,10 @@ pick one without a round trip.
 `toAiSdkTools(ctx)` maps `CECE_TOOLS` to an AI SDK `ToolSet`: for each tool,
 `tool({ description, inputSchema, execute: (input) => t.execute(ctx, input) })`,
 keyed by `name`. `ctx` is closed over, never exposed to the model. A tool that
-throws is reported to Sentry and returns `{ error: 'lookup failed' }` so the
-model can say so instead of the stream dying.
+throws is passed to an injected `onError` (the route reports it to Sentry; the
+smoke script logs it) and returns a generic failure object, so the model can
+say so and no internal error text reaches the model or the client. Sentry is
+injected rather than imported so the smoke script can load the adapter.
 
 ### Model and instructions — `lib/server/ai/cece/model.ts`
 
@@ -202,10 +209,14 @@ for descriptions, so failures count.
 `handleCece(request)`, mounted at `app/api/cece/route.ts` (`POST`):
 
 1. `getUser()`; none → 401 "Your session expired. Sign in again."
-2. Parse body `{ messages, pathname }`. `messages` through
-   `validateUIMessages`; keep the last 20; reject over 20,000 characters of
-   text total → 400. `pathname`: string starting with `/`, not `//`, ≤200
-   chars; otherwise dropped.
+2. Parse body `{ messages, pathname }`. Keep the last 20 messages, then
+   `safeValidateUIMessages`. 400 when: any message has role `system`
+   (`UIMessage.role` allows it, and instructions are the server's alone); the
+   newest message is not the user's; its text exceeds 2,000 characters; or the
+   serialized history exceeds 100,000 characters — serialized rather than text,
+   because a forged history can stuff tool outputs as easily as text.
+   `pathname`: string starting with `/`, not `//` or `/\`, ≤200 chars;
+   otherwise dropped.
 3. `countGenerationsSince(user.id, 24h ago, 'cece')` ≥ limit → 429
    "Cece's daily limit is reached. Try again tomorrow."
 4. `recordGeneration(user.id, CECE_MODEL, 'cece')`.
@@ -214,7 +225,10 @@ for descriptions, so failures count.
    maxOutputTokens, abortSignal: request.signal, onError → console + Sentry })`.
    When `pathname` is present, a context line ("The user is currently on
    /products/12.") is appended to the instructions.
-6. `toUIMessageStreamResponse()`.
+6. `createUIMessageStreamResponse({ stream: toUIMessageStream({ stream:
+   result.stream, tools, onError }) })` — `toUIMessageStreamResponse()` is
+   deprecated in AI SDK 7. `convertToModelMessages` gets
+   `ignoreIncompleteToolCalls` so a Stop mid-tool does not break the next turn.
 
 The client owns history, so it can forge tool results or assistant turns. That
 only misleads the user's own chat: every tool re-reads with the session's
@@ -223,10 +237,12 @@ user id, and nothing writes.
 ### UI — `components/cece/`
 
 - `cece-launcher.tsx` — "Ask Cece" button (sparkle icon) in the
-  `DashboardShell` topbar, left of `CartBadge`. Owns the open state.
+  `DashboardShell` topbar, left of `CartBadge`. Owns the open state and
+  `useChat`: the sheet's content unmounts on close, the launcher does not.
 - `cece-panel.tsx` — client. Right-side `Sheet`, **non-modal**
-  (`modal={false}`, no overlay), so the page behind stays readable and usable
-  while chatting; full width below `sm`. `useChat` with
+  (`modal={false}`, `disablePointerDismissal`, and a new `showOverlay={false}`
+  on `SheetContent`), so the page behind stays readable and usable while
+  chatting; full width below `sm`. `useChat` with
   `DefaultChatTransport({ api: '/api/cece', body: () => ({ pathname }) })`,
   `pathname` from `usePathname()`. Header: "Cece", New chat (clears messages),
   close. Composer: `Textarea`, Enter sends, Shift+Enter newline, Stop while
