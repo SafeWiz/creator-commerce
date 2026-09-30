@@ -2,7 +2,7 @@ import 'server-only';
 
 import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
-import { createAuthMiddleware } from 'better-auth/api';
+import { APIError, createAuthMiddleware } from 'better-auth/api';
 import { nextCookies } from 'better-auth/next-js';
 import { mcp } from 'better-auth/plugins';
 
@@ -79,16 +79,52 @@ export const auth = betterAuth({
   // convenience. Database storage shares one counter across instances.
   rateLimit: { storage: 'database' },
   hooks: {
-    // An MCP client registers itself and picks its own name, so the user's
-    // Allow is the only check on it. The mcp plugin shows its consent page
-    // only when the authorize request carries prompt=consent — compared
-    // exactly, so it is set rather than appended — and most MCP clients never
-    // send it. Setting it here, before the plugin reads the query, also covers
-    // the signed-out path: the plugin stores this query in a cookie on its way
-    // to /login and replays it after sign-in.
     before: createAuthMiddleware(async (ctx) => {
-      if (ctx.path !== '/mcp/authorize') return;
-      return { context: { ...ctx, query: { ...ctx.query, prompt: 'consent' } } };
+      // An MCP client registers itself and picks its own name, so the user's
+      // Allow is the only check on it. The mcp plugin shows its consent page
+      // only when the authorize request carries prompt=consent — compared
+      // exactly, so it is set rather than appended — and most MCP clients
+      // never send it. Setting it here, before the plugin reads the query,
+      // also covers the signed-out path: the plugin stores this query in a
+      // cookie on its way to /login and replays it after sign-in.
+      async function forceConsentOnAuthorize() {
+        if (ctx.path !== '/mcp/authorize') return;
+        return { context: { query: { ...ctx.query, prompt: 'consent' } } };
+      }
+
+      // The consent forced above stores requireConsent: true on the pending
+      // code until /oauth2/consent flips it to false on Allow (see
+      // oidc-provider/index.mjs's oAuthConsent handler). But /mcp/token's own
+      // exchange (mcpOAuthToken in better-auth/dist/plugins/mcp/index.mjs)
+      // never reads that flag — only /oauth2/consent does. So a client
+      // holding a code's PKCE verifier and the consent_code shown in the
+      // /oauth/consent URL (leaked via Referer, logs or analytics) could
+      // redeem it at /mcp/token before anyone clicks Allow. Reject it here,
+      // with the same invalid_grant shape the token endpoint itself uses for
+      // a bad code, so a legitimate exchange — which always runs after
+      // requireConsent has been cleared — is unaffected.
+      async function refuseUnconsentedToken() {
+        if (ctx.path !== '/mcp/token') return;
+        if (ctx.body?.grant_type !== 'authorization_code') return;
+        const code = ctx.body?.code;
+        if (typeof code !== 'string') return;
+        const verification =
+          await ctx.context.internalAdapter.findVerificationValue(code);
+        if (!verification) return;
+        const value = JSON.parse(verification.value) as {
+          requireConsent?: boolean;
+        };
+        if (value.requireConsent) {
+          throw new APIError('UNAUTHORIZED', {
+            error_description: 'invalid code',
+            error: 'invalid_grant',
+          });
+        }
+      }
+
+      return (
+        (await forceConsentOnAuthorize()) ?? (await refuseUnconsentedToken())
+      );
     }),
   },
   plugins: [
@@ -101,6 +137,10 @@ export const auth = betterAuth({
         loginPage: '/login',
         consentPage: '/oauth/consent',
         requirePKCE: true,
+        // Does not close /mcp/register, the endpoint MCP clients actually
+        // hit (its registration_endpoint metadata points there): that route
+        // never checks this flag and is always open. It only gates
+        // oidc-provider's own /oauth2/register, which nothing here uses.
         allowDynamicClientRegistration: true,
       },
     }),
