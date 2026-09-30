@@ -3,13 +3,8 @@ import 'server-only'
 import { tool, type ToolSet } from 'ai'
 
 import { CECE_TOOLS } from '@/lib/server/tools'
+import { TOOL_FAILURE_MESSAGE } from '@/lib/server/tools/shared'
 import type { ToolContext } from '@/lib/server/tools/types'
-
-// What the model sees when a tool throws. Deliberately vague: the real error
-// may carry SQL or internals, and it would reach both the model and the
-// client's copy of the tool part.
-export const TOOL_FAILURE_MESSAGE =
-  'This lookup failed. Tell the user it did not work and suggest trying again later.'
 
 // A plain `Error`'s `message` is not an enumerable own property, so
 // `JSON.stringify` on it serializes to `{}`. The AI SDK builds the *next*
