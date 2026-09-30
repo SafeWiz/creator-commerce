@@ -175,10 +175,11 @@ injected rather than imported so the smoke script can load the adapter.
 
 ### Model and instructions — `lib/server/ai/cece/model.ts`
 
-- `CECE_MODEL`: AI Gateway id. Candidate `alibaba/qwen3.7-flash` (already in use,
-  cheap); fallback `google/gemini-2.5-flash-lite`. Chosen by the smoke script's
-  results on real questions before the UI is wired — tool calling reliability
-  is the criterion.
+- `CECE_MODEL = 'inclusionai/ling-3.1-flash'`. Candidates were
+  `alibaba/qwen3.7-flash` (already in use, cheap) and `google/gemini-2.5-flash-lite`;
+  chosen by the smoke script's results on real questions before the UI was
+  wired, tool-calling reliability being the criterion, and it turned out free
+  for both input and output on AI Gateway too.
 - `CECE_DAILY_MESSAGE_LIMIT = 50`, per user per rolling 24h.
 - `CECE_MAX_STEPS = 5`, `maxOutputTokens: 800`.
 - Instructions: Cece helps with Creator Commerce and nothing else; it is
@@ -198,11 +199,23 @@ One migration:
 - Replace `ai_generations_ownerId_createdAt_idx` with
   `(owner_id, feature, created_at)`.
 
-`countGenerationsSince(ownerId, since, feature)` and
-`recordGeneration(ownerId, model, feature)` take the feature. The describe
-route passes `'describe'`. One Cece row per user message (per request), not per
-model step — the cap counts questions asked. Written before the model call, as
-for descriptions, so failures count.
+Both the describe route and Cece's route go through one function,
+`recordGenerationWithinLimit(ownerId, model, feature, { since, limit })` in
+`lib/server/dal/ai-generations.ts` — this replaced the plan's
+count-then-insert for both callers, not just Cece's. It inserts the row first,
+then counts rows since `since` including the new one; a count over `limit`
+deletes that same row by id before returning `false`. Inserting before
+counting is what makes the cap race-free: counting first would let every
+request in a burst see room before any of them had written. Deleting on
+rejection means a 429 costs the caller nothing and the window drains normally
+instead of a retry at the cap pushing the caller's own reset further out; the
+cost is that near-simultaneous requests arriving right at the limit can all
+see a count above it and all reject, admitting slightly fewer than `limit` in
+that window — the safe direction for a cost guard. One Cece row per user
+message (per request), not per model step — the cap counts questions asked.
+The row is written before the model call, as for descriptions, so a failed
+model call still counts; a rejected (429) request does not, since its row is
+deleted.
 
 ### Route — `lib/server/request/cece.ts`
 
@@ -211,24 +224,36 @@ for descriptions, so failures count.
 1. `getUser()`; none → 401 "Your session expired. Sign in again."
 2. Parse body `{ messages, pathname }`. Keep the last 20 messages, then
    `safeValidateUIMessages`. 400 when: any message has role `system`
-   (`UIMessage.role` allows it, and instructions are the server's alone); the
-   newest message is not the user's; its text exceeds 2,000 characters; or the
-   serialized history exceeds 100,000 characters — serialized rather than text,
-   because a forged history can stuff tool outputs as easily as text.
-   `pathname`: string starting with `/`, not `//` or `/\`, ≤200 chars;
-   otherwise dropped.
-3. `countGenerationsSince(user.id, 24h ago, 'cece')` ≥ limit → 429
+   (`UIMessage.role` allows it, and instructions are the server's alone); any
+   part of a user message is not `text` (the panel only ever sends text, so
+   anything else is either a stale shape or a crafted one — e.g. a file part
+   whose `url` is not a real URL, which `safeValidateUIMessages` accepts but
+   `convertToModelMessages` then throws on; rejecting it here also closes a
+   server-side file-URL path in user messages); the newest message is not the
+   user's; its text exceeds 2,000 characters; or the serialized history
+   exceeds 100,000 characters — serialized rather than text, because a forged
+   history can stuff tool outputs as easily as text. `pathname`: string
+   starting with `/`, not `//` or `/\`, ≤200 chars; otherwise dropped.
+3. `convertToModelMessages(messages, { tools, ignoreIncompleteToolCalls: true })`
+   runs in a try/catch **before** the cap is touched: a history that passes
+   `safeValidateUIMessages` but still fails to convert (e.g. a forged tool
+   part) is a 400 and spends no message, rather than a 500 after the counter
+   already moved. The catch `console.warn`s and returns 400 without reporting
+   to Sentry — this is client input, not a server fault, and reporting it
+   would let a client generate Sentry events for free.
+   `ignoreIncompleteToolCalls` drops a call left with no result by a Stop
+   pressed mid-tool, which the model otherwise rejects.
+4. `recordGenerationWithinLimit(user.id, CECE_MODEL, 'cece', { since: 24h ago,
+   limit: CECE_DAILY_MESSAGE_LIMIT })` — see "Rate limit" above. `false` → 429
    "Cece's daily limit is reached. Try again tomorrow."
-4. `recordGeneration(user.id, CECE_MODEL, 'cece')`.
-5. `streamText({ model, instructions, messages: convertToModelMessages(...),
-   tools: toAiSdkTools({ userId: user.id }), stopWhen: isStepCount(5),
-   maxOutputTokens, abortSignal: request.signal, onError → console + Sentry })`.
-   When `pathname` is present, a context line ("The user is currently on
+5. `streamText({ model, instructions, messages, tools: toAiSdkTools({ userId:
+   user.id }, { onError }), stopWhen: isStepCount(5), maxOutputTokens,
+   abortSignal: request.signal, onError → console + Sentry })`. When
+   `pathname` is present, a context line ("The user is currently on
    /products/12.") is appended to the instructions.
 6. `createUIMessageStreamResponse({ stream: toUIMessageStream({ stream:
    result.stream, tools, onError }) })` — `toUIMessageStreamResponse()` is
-   deprecated in AI SDK 7. `convertToModelMessages` gets
-   `ignoreIncompleteToolCalls` so a Stop mid-tool does not break the next turn.
+   deprecated in AI SDK 7.
 
 The client owns history, so it can forge tool results or assistant turns. That
 only misleads the user's own chat: every tool re-reads with the session's
@@ -242,20 +267,36 @@ user id, and nothing writes.
 - `cece-panel.tsx` — client. Right-side `Sheet`, **non-modal**
   (`modal={false}`, `disablePointerDismissal`, and a new `showOverlay={false}`
   on `SheetContent`), so the page behind stays readable and usable while
-  chatting; full width below `sm`. `useChat` with
-  `DefaultChatTransport({ api: '/api/cece', body: () => ({ pathname }) })`,
-  `pathname` from `usePathname()`. Header: "Cece", New chat (clears messages),
-  close. Composer: `Textarea`, Enter sends, Shift+Enter newline, Stop while
-  streaming.
+  chatting; full width below `sm`. `useChat` (created in `cece-launcher.tsx`
+  with a plain `DefaultChatTransport({ api: '/api/cece' })`, no body function
+  on the transport — see below); `pathname` from `usePathname()`. Header:
+  "Cece", New chat (clears messages), close. Composer: `Textarea`, Enter
+  sends, Shift+Enter newline, Stop while streaming.
 - `cece-message.tsx` — text parts render as markdown via `streamdown` (new
-  dependency; tolerates half-streamed markdown). Link override: relative `/…`
-  paths render with `next/link`; any other href renders as plain text. Images
-  disabled. Tool parts render as a muted chip with a per-tool label ("Looking
-  up your products…" / "Looked up your products"); tool JSON is never shown.
+  dependency; tolerates half-streamed markdown; needs an `@source` line in
+  `app/globals.css` so Tailwind scans its prebuilt component classes, which
+  live in `node_modules` and are skipped otherwise). Link override: relative
+  `/…` paths render with `next/link`; any other href renders as plain text —
+  this relies on streamdown's default `rehype-harden` step normalizing a
+  relative href first, so overriding streamdown's `rehypePlugins` later would
+  need the check rechecked. Images disabled. Tool parts render as a muted chip
+  with a per-tool label ("Looking up your products…" / "Looked up your
+  products"); a lookup that ends in `output-error` renders an X and "Couldn't
+  look that up" instead — one shared failure label, not per-tool, since the
+  user doesn't need to know which lookup failed. Tool JSON is never shown.
 - Empty state: a one-line greeting and starter prompts — "How do I publish a
   product?", "How are my sales this month?", "What should I do next?".
-- Errors: 429 and 401 show the server's message inline; anything else shows
-  "Something went wrong." with Retry (`regenerate()`).
+- Errors: any non-OK response's body — Cece's own 401/429/400 message, or (the
+  user's choice) a raw `APICallError` body for anything else — is shown
+  inline as-is, with Retry (`regenerate()`).
+- `pathname` is sent as a request body per call
+  (`sendMessage(..., { body: { pathname } })`, `regenerate({ body: {
+  pathname } })`), not through the transport's own `body` option: the
+  transport is created once in `cece-launcher.tsx` and a `body` function
+  closing over `pathname` would read a stale value after navigation, and
+  routing a ref through the transport to dodge that tripped the
+  `react-hooks/refs` lint rule. Reading `pathname` in `cece-panel.tsx`'s props
+  and attaching it per call keeps the latest render as the source of truth.
 
 The panel is mounted inside `DashboardShell`, which already stays mounted
 across `(master)` navigations, so the conversation persists between pages.
@@ -293,8 +334,25 @@ Gabi runs typecheck, lint, build and the migration. Then, by hand:
 - `get_my_product` with another user's product id → "not found" answer.
 - `list_recent_sales` output contains no email addresses.
 
-## Open before implementation
+## Settled during implementation
 
-- Which model: settled by the smoke script.
-- `streamdown`'s link and image overrides: confirm the API against the
-  installed version before writing `cece-message.tsx`.
+- **Which model**: settled by the smoke script, as planned —
+  `inclusionai/ling-3.1-flash` over the Qwen and Gemini candidates.
+- **`streamdown`'s link and image overrides**: confirmed against the
+  installed version; the `components` prop takes `a` and `img` overrides
+  directly, and the link check turned out to depend on streamdown's default
+  `rehype-harden` step normalizing relative hrefs first (see "UI" above).
+- **The rate-limit race** (not listed as open, but decided mid-build): the
+  plan's count-then-insert admits more than `limit` under concurrent
+  requests. Replaced with `recordGenerationWithinLimit` (insert, count
+  including the new row, delete on rejection) in both Cece's route and the
+  describe route, so the fix isn't Cece-only.
+- **Malformed history vs. the cap** (also decided mid-build): a history that
+  passes `safeValidateUIMessages` but throws in `convertToModelMessages`
+  needed to be a 400, not a spent message and a 500 — conversion now runs in
+  a try/catch before the cap is touched.
+- **`pathname` delivery**: the plan's transport-level `body: () =>
+  ({ pathname })` was replaced with `pathname` sent per call from
+  `cece-panel.tsx`, because the transport is long-lived and a `body` function
+  on it either closes over a stale `pathname` or needs a ref, which
+  `react-hooks/refs` rejects.
