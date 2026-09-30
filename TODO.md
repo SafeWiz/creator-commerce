@@ -337,3 +337,13 @@ ordered by `createdAt`, top 50, no pagination. Three known limits:
 - **Two models where one would do.** Qwen rejects PDFs, so they go to Gemini.
   A single model that reads both, within the free credits, would remove
   `descriptionModelFor` and the second constant.
+- **Cece answers in prose where a card would do.** When a tool returns
+  something the app already has a visual for — a product (`get_my_product`,
+  `search_marketplace`), a sales summary, a purchase — the panel could render
+  a dedicated card from the tool part's `output` instead of leaving it to the
+  model to restate in text. `components/cece/cece-message.tsx` already
+  switches on tool parts (today it only draws a status chip), so a card is a
+  per-tool renderer keyed on the tool name, reusing `ProductCard` /
+  `KpiCard`-style components where they fit. The tool outputs are the
+  contract: a card only reads fields the tool already returns, and the model
+  can then keep its text short and point at the card.
