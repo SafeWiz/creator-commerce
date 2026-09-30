@@ -103,7 +103,11 @@ export async function handleCece(request: Request): Promise<Response> {
   // `convertToModelMessages` hands straight into the model message. It is
   // the provider, not this server, that would fetch that url; rejecting
   // both part types regardless of role closes that off for every role, not
-  // just the user's.
+  // just the user's. The panel itself never produces either: `sendSources`
+  // defaults to `false` and is never turned on in the `toUIMessageStream`
+  // call below, and CECE_MODEL is text-only, so a genuine assistant turn
+  // never emits one. Switching to a model that emits files or sources, or
+  // turning `sendSources` on, means revisiting this check.
   const hasUnproducedPart = messages.some((m) =>
     m.parts.some((part) => part.type === 'file' || part.type.startsWith('source-')),
   )

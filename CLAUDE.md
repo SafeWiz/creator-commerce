@@ -427,14 +427,24 @@ quote marketplace text other users wrote. The link check in
 `rehype-harden` step normalizing a relative href before the check sees it —
 overriding streamdown's `rehypePlugins` would need that check rechecked. A
 tool lookup that throws has `toAiSdkTools` (`lib/server/ai/cece/ai-sdk.ts`)
-report it through the injected `onError` and rethrow a sanitized `Error` —
-never the original — which the AI SDK turns into an `output-error` tool part
-on the client; the chip renders that as an X and "Couldn't look that up"
-rather than the generic label. A chip left in a non-final state by Stop, or by
-the stream erroring mid-call, renders as "Stopped" with a muted icon instead
-of spinning forever. A non-OK response's body — Cece's own error
-text, or the route's 401/429/400 message — is shown to the user as-is,
-including a raw `APICallError` body for anything else the route sends.
+report it through the injected `onError` and rethrow a `ToolFailure` — a small
+`Error` subclass, never the original error, which may carry SQL or internals.
+The AI SDK builds the *next* step's model input from a thrown tool error with
+`errorMode: "json"`, i.e. `JSON.parse(JSON.stringify(error))` — and a plain
+`Error`'s `message` isn't enumerable, so that would hand the model `{}`.
+`ToolFailure` defines `toJSON()` so the model reads `{ error:
+"<TOOL_FAILURE_MESSAGE>" }` in that same request instead. On the client this
+becomes an `output-error` tool part; the chip renders that as an X and
+"Couldn't look that up" rather than the generic label — the chip's label is
+hardcoded, not read from the part's `errorText`, which is always the route's
+own `toUIMessageStream({ onError })` string ("Cece ran into a problem
+answering."). That string, not `TOOL_FAILURE_MESSAGE`, is what the model sees
+if the client replays this turn's history on a later request. A chip left in
+a non-final state by Stop, or by the stream erroring mid-call, renders as
+"Stopped" with a muted icon instead of spinning forever. A non-OK response's
+body — Cece's own error text, or the route's 401/429/400 message — is shown
+to the user as-is, including a raw `APICallError` body for anything else the
+route sends.
 
 The panel sends `pathname` (from `usePathname()`) as a request body on each
 `sendMessage`/`regenerate` call, not through the transport: `useChat`'s

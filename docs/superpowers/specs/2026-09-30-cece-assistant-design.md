@@ -173,15 +173,29 @@ pick one without a round trip.
 each tool, `tool({ description, inputSchema, execute })`, keyed by `name`.
 `ctx` is closed over, never exposed to the model. A tool that throws is passed
 to the injected `onError` (the route reports it to Sentry; the smoke script
-logs it) and then the catch rethrows a sanitized `Error` — never the
-original, which may carry SQL or internals. Rethrowing, not returning a
-failure value, is what makes the AI SDK treat the call as failed: it becomes
-a `tool-error` part in `step.content` on the server and an `output-error`
-tool part on the client, which is what the chip in `cece-message.tsx` keys
-off to render an X instead of a false success check. A tool error doesn't end
-the step loop or the stream, so the model still gets a turn to answer after
-seeing it. Sentry is injected rather than imported so the smoke script can
-load the adapter.
+logs it) and then the catch rethrows a `ToolFailure` — a small `Error`
+subclass, never the original error, which may carry SQL or internals.
+Rethrowing, not returning a failure value, is what makes the AI SDK treat the
+call as failed: it becomes a `tool-error` part in `step.content` on the
+server and an `output-error` tool part on the client, which is what the chip
+in `cece-message.tsx` keys off to render an X instead of a false success
+check. A tool error doesn't end the step loop or the stream, so the model
+still gets a turn to answer after seeing it.
+
+What the model actually reads differs by when it reads it. In the *same*
+request, the AI SDK builds the next step's model input from the thrown error
+with `errorMode: "json"` — `JSON.parse(JSON.stringify(error))` — and a plain
+`Error`'s `message` isn't an enumerable own property, so that serializes to
+`{}` unless the error defines `toJSON()`. `ToolFailure` does, returning
+`{ error: TOOL_FAILURE_MESSAGE }`, which is what the model reads. If the
+client instead replays this turn's history on a *later* request, the tool
+part it sends back carries whatever `errorText` the route's own
+`toUIMessageStream({ onError })` produced for the client — a fixed string
+("Cece ran into a problem answering."), unrelated to `TOOL_FAILURE_MESSAGE` —
+and that string, not `TOOL_FAILURE_MESSAGE`, is what the model reads on
+replay (via `errorMode: "text"`, `getErrorMessage(error).toString()`, no
+`toJSON` involved since the value is already a plain string by then). Sentry
+is injected rather than imported so the smoke script can load the adapter.
 
 ### Model and instructions — `lib/server/ai/cece/model.ts`
 
