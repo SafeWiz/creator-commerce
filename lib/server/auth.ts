@@ -2,7 +2,9 @@ import 'server-only';
 
 import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
+import { createAuthMiddleware } from 'better-auth/api';
 import { nextCookies } from 'better-auth/next-js';
+import { mcp } from 'better-auth/plugins';
 
 import { appOrigins, appUrl } from '@/lib/server/app-url';
 import db from '@/lib/server/db';
@@ -76,7 +78,34 @@ export const auth = betterAuth({
   // Password capped near 500/day, so under-counting there is the risk, not a
   // convenience. Database storage shares one counter across instances.
   rateLimit: { storage: 'database' },
-  // nextCookies must be the last plugin: it lets server actions set
-  // auth cookies via next/headers.
-  plugins: [nextCookies()],
+  hooks: {
+    // An MCP client registers itself and picks its own name, so the user's
+    // Allow is the only check on it. The mcp plugin shows its consent page
+    // only when the authorize request carries prompt=consent — compared
+    // exactly, so it is set rather than appended — and most MCP clients never
+    // send it. Setting it here, before the plugin reads the query, also covers
+    // the signed-out path: the plugin stores this query in a cookie on its way
+    // to /login and replays it after sign-in.
+    before: createAuthMiddleware(async (ctx) => {
+      if (ctx.path !== '/mcp/authorize') return;
+      return { context: { ...ctx, query: { ...ctx.query, prompt: 'consent' } } };
+    }),
+  },
+  plugins: [
+    // Makes this app an OAuth 2.1 authorization server for MCP clients
+    // (Claude, ChatGPT, Cursor…): dynamic client registration, PKCE, tokens.
+    // /api/mcp checks those tokens with withMcpAuth.
+    mcp({
+      loginPage: '/login',
+      oidcConfig: {
+        loginPage: '/login',
+        consentPage: '/oauth/consent',
+        requirePKCE: true,
+        allowDynamicClientRegistration: true,
+      },
+    }),
+    // nextCookies must be the last plugin: it lets server actions set
+    // auth cookies via next/headers.
+    nextCookies(),
+  ],
 });
