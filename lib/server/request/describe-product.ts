@@ -47,13 +47,17 @@ export async function handleDescribeProduct(request: Request): Promise<Response>
   const upload = await getOwnedUpload(user.id, parsed.data.fileKey)
   if (!upload) return fail('File not found.', 404)
 
-  const used = await countGenerationsSince(user.id, new Date(Date.now() - DAY_MS))
+  const used = await countGenerationsSince(
+    user.id,
+    new Date(Date.now() - DAY_MS),
+    'describe',
+  )
   if (used >= DAILY_GENERATION_LIMIT) {
     return fail('Daily limit reached. Try again tomorrow.', 429)
   }
   // Chosen once, so the row records the model the call actually goes to.
   const model = descriptionModelFor(upload)
-  await recordGeneration(user.id, model)
+  await recordGeneration(user.id, model, 'describe')
 
   // Signed only when it will be sent. Five minutes, like downloads — far
   // longer than the model needs to fetch it.
