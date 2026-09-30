@@ -20,7 +20,7 @@ import {
   CECE_MODEL,
   ceceInstructions,
 } from '@/lib/server/ai/cece/model'
-import { countGenerationsSince, recordGeneration } from '@/lib/server/dal/ai-generations'
+import { recordGenerationWithinLimit } from '@/lib/server/dal/ai-generations'
 import { getUser } from '@/lib/server/request/session'
 
 const DAY_MS = 24 * 60 * 60 * 1000
@@ -86,6 +86,17 @@ export async function handleCece(request: Request): Promise<Response> {
   // Instructions are the server's alone.
   if (messages.some((m) => m.role === 'system')) return fail('Invalid request.', 400)
 
+  // The panel only ever sends text. A part of any other type on a user
+  // message is either a stale shape the client never produces, or a crafted
+  // one — e.g. a file part whose `url` is not a real URL, which
+  // `safeValidateUIMessages` accepts (it only checks the field is a string)
+  // and which then throws inside `convertToModelMessages`. Rejecting it here
+  // also stops a client from making the provider fetch an arbitrary URL.
+  const hasNonTextUserPart = messages.some(
+    (m) => m.role === 'user' && m.parts.some((part) => part.type !== 'text'),
+  )
+  if (hasNonTextUserPart) return fail('Invalid request.', 400)
+
   const last = messages.at(-1)
   if (last?.role !== 'user') return fail('Invalid request.', 400)
   if (questionText(last).length > MAX_QUESTION_CHARS) {
@@ -95,26 +106,39 @@ export async function handleCece(request: Request): Promise<Response> {
     return fail('This conversation is too long. Start a new chat.', 400)
   }
 
-  const used = await countGenerationsSince(user.id, new Date(Date.now() - DAY_MS), 'cece')
-  if (used >= CECE_DAILY_MESSAGE_LIMIT) {
-    return fail("Cece's daily limit is reached. Try again tomorrow.", 429)
-  }
-  await recordGeneration(user.id, CECE_MODEL, 'cece')
-
   const tools = toAiSdkTools(
     { userId: user.id },
     { onError: (error, toolName) => report(error, `tool ${toolName} failed`) },
   )
 
+  // Converted before the counter so a history that only looks valid to
+  // `safeValidateUIMessages` (e.g. a forged tool part) is a 400 rather than
+  // a spent message and an unhandled 500.
+  let modelMessages
+  try {
+    modelMessages = await convertToModelMessages(messages, {
+      tools,
+      // A Stop pressed mid-tool leaves a call with no result in the history;
+      // the model rejects those, so they are dropped.
+      ignoreIncompleteToolCalls: true,
+    })
+  } catch (error) {
+    report(error, 'convertToModelMessages failed')
+    return fail('Invalid request.', 400)
+  }
+
+  const withinLimit = await recordGenerationWithinLimit(user.id, CECE_MODEL, 'cece', {
+    since: new Date(Date.now() - DAY_MS),
+    limit: CECE_DAILY_MESSAGE_LIMIT,
+  })
+  if (!withinLimit) {
+    return fail("Cece's daily limit is reached. Try again tomorrow.", 429)
+  }
+
   const result = streamText({
     model: CECE_MODEL,
     instructions: ceceInstructions({ pathname: parsed.data.pathname }),
-    // A Stop pressed mid-tool leaves a call with no result in the history;
-    // the model rejects those, so they are dropped.
-    messages: await convertToModelMessages(messages, {
-      tools,
-      ignoreIncompleteToolCalls: true,
-    }),
+    messages: modelMessages,
     tools,
     stopWhen: isStepCount(CECE_MAX_STEPS),
     maxOutputTokens: CECE_MAX_OUTPUT_TOKENS,

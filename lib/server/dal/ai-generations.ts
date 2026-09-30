@@ -8,9 +8,9 @@ import { aiGenerationsTable, type AiFeature } from '@/lib/server/db/schemas/ai'
 /**
  * How many requests to one AI feature the owner started since `since`.
  *
- * Count-then-insert is not atomic, so two requests landing together can both
- * see one under the cap and both proceed. That overshoots by one, which is
- * fine for a cost guard; it is not a quota anyone is billed against.
+ * Callers do not use this to decide whether to proceed — that race belongs
+ * to `recordGenerationWithinLimit`, below, which counts only after its own
+ * insert is ordered against every other one.
  */
 export async function countGenerationsSince(
   ownerId: string,
@@ -37,4 +37,24 @@ export async function recordGeneration(
   feature: AiFeature,
 ): Promise<void> {
   await db.insert(aiGenerationsTable).values({ ownerId, model, feature })
+}
+
+/**
+ * Records one request against an AI feature's cap and reports whether it is
+ * within it.
+ *
+ * Insert first, then count including the new row: inserts are ordered, so
+ * the request that makes it the (limit + 1)th sees a count above the limit
+ * however many run at once. Counting first would let parallel requests all
+ * see room before any of them wrote. A rejected request still leaves its row,
+ * which is what "failed attempts count" asks for anyway.
+ */
+export async function recordGenerationWithinLimit(
+  ownerId: string,
+  model: string,
+  feature: AiFeature,
+  { since, limit }: { since: Date; limit: number },
+): Promise<boolean> {
+  await recordGeneration(ownerId, model, feature)
+  return (await countGenerationsSince(ownerId, since, feature)) <= limit
 }
