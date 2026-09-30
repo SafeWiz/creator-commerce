@@ -46,8 +46,14 @@ export async function recordGeneration(
  * Insert first, then count including the new row: inserts are ordered, so
  * the request that makes it the (limit + 1)th sees a count above the limit
  * however many run at once. Counting first would let parallel requests all
- * see room before any of them wrote. A rejected request still leaves its row,
- * which is what "failed attempts count" asks for anyway.
+ * see room before any of them wrote.
+ *
+ * A rejected request's row is deleted before returning: a 429 costs the
+ * caller nothing, and the window drains instead of a retry at the cap
+ * pushing the caller's own reset back forever. Near-simultaneous requests
+ * arriving right at the limit may all see a count above it and all reject,
+ * letting slightly fewer than `limit` through in that window — the safe
+ * direction for a cost guard.
  */
 export async function recordGenerationWithinLimit(
   ownerId: string,
@@ -55,6 +61,14 @@ export async function recordGenerationWithinLimit(
   feature: AiFeature,
   { since, limit }: { since: Date; limit: number },
 ): Promise<boolean> {
-  await recordGeneration(ownerId, model, feature)
-  return (await countGenerationsSince(ownerId, since, feature)) <= limit
+  const [inserted] = await db
+    .insert(aiGenerationsTable)
+    .values({ ownerId, model, feature })
+    .returning({ id: aiGenerationsTable.id })
+
+  const withinLimit = (await countGenerationsSince(ownerId, since, feature)) <= limit
+  if (!withinLimit) {
+    await db.delete(aiGenerationsTable).where(eq(aiGenerationsTable.id, inserted.id))
+  }
+  return withinLimit
 }

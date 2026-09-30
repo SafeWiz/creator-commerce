@@ -1,11 +1,12 @@
 import 'server-only'
 
 /**
- * Cece's model, as an AI Gateway id. Chosen with `npm run ai:cece` on real
- * questions: the criterion is calling the right tools reliably, then cost.
- * Changing model is this line.
+ * Cece's model, as an AI Gateway id. Chosen with `npm run ai:cece` on
+ * 2026-09-30 over the Qwen and Gemini candidates: free for both input and
+ * output on the gateway. The criterion is calling the right tools reliably,
+ * then cost. Changing model is this line.
  */
-export const CECE_MODEL = 'alibaba/qwen3.7-flash'
+export const CECE_MODEL = 'inclusionai/ling-3.1-flash'
 
 /** Messages per user per rolling 24 hours. A cost guard, not a quota. */
 export const CECE_DAILY_MESSAGE_LIMIT = 50

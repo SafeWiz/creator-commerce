@@ -8,6 +8,7 @@ import {
   safeValidateUIMessages,
   streamText,
   toUIMessageStream,
+  type ModelMessage,
   type UIMessage,
 } from 'ai'
 import { z } from 'zod'
@@ -86,12 +87,13 @@ export async function handleCece(request: Request): Promise<Response> {
   // Instructions are the server's alone.
   if (messages.some((m) => m.role === 'system')) return fail('Invalid request.', 400)
 
-  // The panel only ever sends text. A part of any other type on a user
+  // The panel only ever sends text, so a part of any other type on a user
   // message is either a stale shape the client never produces, or a crafted
   // one — e.g. a file part whose `url` is not a real URL, which
   // `safeValidateUIMessages` accepts (it only checks the field is a string)
   // and which then throws inside `convertToModelMessages`. Rejecting it here
-  // also stops a client from making the provider fetch an arbitrary URL.
+  // closes the server-side file-URL path in user messages; an assistant-role
+  // file part can still carry a client-chosen URL.
   const hasNonTextUserPart = messages.some(
     (m) => m.role === 'user' && m.parts.some((part) => part.type !== 'text'),
   )
@@ -114,7 +116,7 @@ export async function handleCece(request: Request): Promise<Response> {
   // Converted before the counter so a history that only looks valid to
   // `safeValidateUIMessages` (e.g. a forged tool part) is a 400 rather than
   // a spent message and an unhandled 500.
-  let modelMessages
+  let modelMessages: ModelMessage[]
   try {
     modelMessages = await convertToModelMessages(messages, {
       tools,
@@ -123,7 +125,9 @@ export async function handleCece(request: Request): Promise<Response> {
       ignoreIncompleteToolCalls: true,
     })
   } catch (error) {
-    report(error, 'convertToModelMessages failed')
+    // Client-controlled input rejected before the counter runs — logged, not
+    // reported to Sentry, or a client could generate Sentry events for free.
+    console.warn('[cece] rejected history', error)
     return fail('Invalid request.', 400)
   }
 
