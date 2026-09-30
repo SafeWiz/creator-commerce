@@ -12,6 +12,7 @@ import { SignOutButton } from "@/components/layouts/sign-out-button"
 import { DashboardTopbarTitle } from "@/components/layouts/dashboard-topbar-title"
 import { VerifyEmailBanner } from "@/components/layouts/verify-email-banner"
 import { CartBadge } from "@/components/cart-badge"
+import { CeceLauncher } from "@/components/cece/cece-launcher"
 import { Button } from "@/components/ui/button"
 import {
   Sidebar,
@@ -62,6 +63,7 @@ export async function DashboardShell({
           <SidebarTrigger />
           <DashboardTopbarTitle />
           <div className="flex-1" />
+          <CeceLauncher />
           <CartBadge />
           <Button variant="outline" size="sm" nativeButton={false} render={<Link href={`/@${user.handle}`} />}>
             <ExternalLink /> View storefront
