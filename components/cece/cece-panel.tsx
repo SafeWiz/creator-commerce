@@ -43,6 +43,11 @@ export function CecePanel({
   const bottom = useRef<HTMLDivElement>(null)
   const busy = status === "submitted" || status === "streaming"
 
+  // Both a fresh send and a retry must carry the page the user is on: the
+  // transport has no body of its own, so whichever call skips this sends no
+  // pathname at all.
+  const requestOptions = { body: { pathname } }
+
   // Follow the answer as it streams.
   useEffect(() => {
     bottom.current?.scrollIntoView({ block: "end" })
@@ -51,7 +56,7 @@ export function CecePanel({
   function send(text: string) {
     const trimmed = text.trim()
     if (!trimmed || busy) return
-    void sendMessage({ text: trimmed }, { body: { pathname } })
+    void sendMessage({ text: trimmed }, requestOptions)
     setInput("")
   }
 
@@ -91,9 +96,9 @@ export function CecePanel({
           ))
         )}
         {error && (
-          <div className="flex items-center gap-2 text-sm text-destructive">
+          <div role="alert" className="flex items-center gap-2 text-sm text-destructive">
             <span>{errorMessage(error)}</span>
-            <Button variant="ghost" size="sm" onClick={() => void regenerate()}>
+            <Button variant="ghost" size="sm" onClick={() => void regenerate(requestOptions)}>
               <RotateCcw /> Retry
             </Button>
           </div>

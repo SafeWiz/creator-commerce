@@ -3,10 +3,8 @@
 import type { ComponentProps } from "react"
 import Link from "next/link"
 import { getToolName, isToolUIPart, type UIMessage } from "ai"
-import { Check, Loader2 } from "lucide-react"
+import { Check, Loader2, X } from "lucide-react"
 import { Streamdown } from "streamdown"
-
-import { cn } from "@/lib/utils"
 
 // Client-side copy of the tool names in lib/server/tools — the registry is
 // server-only. An unknown name falls back to the generic label.
@@ -23,8 +21,16 @@ const TOOL_LABELS: Record<string, { running: string; done: string }> = {
 }
 const FALLBACK_LABEL = { running: "Looking something up…", done: "Looked something up" }
 
+// Shared across tools rather than per-tool: the user doesn't need to know
+// which lookup failed, only that this one did.
+const TOOL_FAILURE_LABEL = "Couldn't look that up"
+
 // A path on this app. `//` and `/\` are excluded because browsers read both
-// as the start of another host.
+// as the start of another host. The regex alone would accept inputs like
+// `/\t/evil.com`; it is safe because streamdown's default `rehype-harden`
+// step normalizes relative hrefs (via `new URL(href, base)`) before
+// AnswerLink sees them — overriding streamdown's `rehypePlugins` would need
+// this rechecked.
 const APP_PATH = /^\/(?![\/\\])/
 
 /**
@@ -80,16 +86,21 @@ export function CeceMessage({
         }
         if (isToolUIPart(part)) {
           const label = TOOL_LABELS[getToolName(part)] ?? FALLBACK_LABEL
-          const done = part.state === "output-available" || part.state === "output-error"
+          const failed = part.state === "output-error"
+          const done = part.state === "output-available"
           return (
             <span
               key={i}
-              className={cn(
-                "inline-flex w-fit items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 text-xs text-muted-foreground",
-              )}
+              className="inline-flex w-fit items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 text-xs text-muted-foreground"
             >
-              {done ? <Check className="size-3" /> : <Loader2 className="size-3 animate-spin" />}
-              {done ? label.done : label.running}
+              {failed ? (
+                <X className="size-3" />
+              ) : done ? (
+                <Check className="size-3" />
+              ) : (
+                <Loader2 className="size-3 animate-spin" />
+              )}
+              {failed ? TOOL_FAILURE_LABEL : done ? label.done : label.running}
             </span>
           )
         }
