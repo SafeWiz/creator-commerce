@@ -366,8 +366,12 @@ Three layers, and the boundaries between them are the point:
   a snake_case `name`, a `description`, a zod `inputSchema`, and
   `execute(ctx, input)`. `CECE_TOOLS` in `index.ts` is the whole list. This
   directory imports the DAL, zod and `lib/server/ai/cece/guide.ts` — never
-  `ai`, `@sentry/*`, `next/*` or `request/`. That is what lets a future MCP
-  server register the same objects, and what lets `npm run ai:cece` load them.
+  `ai`, `@sentry/*`, `next/*` or `request/`. That is what lets `npm run ai:cece`
+  load them, and what a future MCP adapter would need: it can register
+  `CECE_TOOLS` as they are, but must absolutize their relative links
+  (`lib/server/tools/shared.ts`) against `appUrl` (`lib/server/app-url.ts`)
+  and run under `--conditions=react-server`, since these modules import
+  `server-only` — exactly as `npm run ai:cece` already does.
   The check:
 
   ```bash
@@ -398,7 +402,10 @@ History lives in the browser (`useChat` in `components/cece/cece-launcher.tsx`)
 and is not stored, so the route trusts nothing about it: at most the last 20
 messages, no `system` role (instructions are the server's alone), a user
 message may hold only `text` parts (the panel never sends anything else, and
-this also closes off a crafted file-URL part), the newest message must be the
+this also closes off a crafted file-URL part), a message of any role may not
+hold a `file` or `source-*` part (an assistant-role one in a forged history
+could carry a url the provider, not this server, would fetch — rejecting both
+types on every role closes that off), the newest message must be the
 user's own and under 2,000 characters, and the serialized history must be
 under 100,000 characters. `convertToModelMessages` then runs in a try/catch
 before the cap is touched, so a history that passes `safeValidateUIMessages`
@@ -419,8 +426,13 @@ quote marketplace text other users wrote. The link check in
 `components/cece/cece-message.tsx` relies on streamdown's default
 `rehype-harden` step normalizing a relative href before the check sees it —
 overriding streamdown's `rehypePlugins` would need that check rechecked. A
-tool lookup that throws renders as a chip with an X and "Couldn't look that
-up" rather than the generic label. A non-OK response's body — Cece's own error
+tool lookup that throws has `toAiSdkTools` (`lib/server/ai/cece/ai-sdk.ts`)
+report it through the injected `onError` and rethrow a sanitized `Error` —
+never the original — which the AI SDK turns into an `output-error` tool part
+on the client; the chip renders that as an X and "Couldn't look that up"
+rather than the generic label. A chip left in a non-final state by Stop, or by
+the stream erroring mid-call, renders as "Stopped" with a muted icon instead
+of spinning forever. A non-OK response's body — Cece's own error
 text, or the route's 401/429/400 message — is shown to the user as-is,
 including a raw `APICallError` body for anything else the route sends.
 

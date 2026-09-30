@@ -64,6 +64,15 @@ for (const step of result.steps) {
   for (const toolResult of step.toolResults) {
     console.log(`  ← ${JSON.stringify(toolResult.output).slice(0, 300)}`)
   }
+  // A failed call is a `tool-error` part in `step.content`, not a
+  // `step.toolResults` entry (that getter filters to `type === 'tool-result'`
+  // only) — without this, a thrown tool prints nothing here even though the
+  // adapter rethrew and the model saw the error.
+  for (const part of step.content) {
+    if (part.type === 'tool-error') {
+      console.log(`  ✗ ${part.toolName} ${String(part.error)}`.slice(0, 300))
+    }
+  }
 }
 
 console.log(`\n${result.text}\n`)

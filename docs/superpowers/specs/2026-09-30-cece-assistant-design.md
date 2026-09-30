@@ -86,7 +86,11 @@ Import rules, written into CLAUDE.md:
 
 - `lib/server/tools/` imports the DAL, zod, `lib/server/ai/cece/guide.ts` and
   environment-agnostic `lib/` modules only. Never `ai`, never `request/`, never
-  `next/*`. That is what lets the MCP adapter and the smoke script load it.
+  `next/*`. That is what lets `npm run ai:cece` load it, and what a future MCP
+  adapter needs: it can register `CECE_TOOLS` as they are, but must
+  absolutize their relative links (`lib/server/tools/shared.ts`) against
+  `appUrl` (`lib/server/app-url.ts`) and run under `--conditions=react-server`,
+  since these modules import `server-only` — exactly as the smoke script does.
 - `lib/server/ai/cece/` imports nothing from `request/`, like
   `product-description.ts`.
 
@@ -165,13 +169,19 @@ pick one without a round trip.
 
 ### AI SDK adapter — `lib/server/ai/cece/ai-sdk.ts`
 
-`toAiSdkTools(ctx)` maps `CECE_TOOLS` to an AI SDK `ToolSet`: for each tool,
-`tool({ description, inputSchema, execute: (input) => t.execute(ctx, input) })`,
-keyed by `name`. `ctx` is closed over, never exposed to the model. A tool that
-throws is passed to an injected `onError` (the route reports it to Sentry; the
-smoke script logs it) and returns a generic failure object, so the model can
-say so and no internal error text reaches the model or the client. Sentry is
-injected rather than imported so the smoke script can load the adapter.
+`toAiSdkTools(ctx, { onError })` maps `CECE_TOOLS` to an AI SDK `ToolSet`: for
+each tool, `tool({ description, inputSchema, execute })`, keyed by `name`.
+`ctx` is closed over, never exposed to the model. A tool that throws is passed
+to the injected `onError` (the route reports it to Sentry; the smoke script
+logs it) and then the catch rethrows a sanitized `Error` — never the
+original, which may carry SQL or internals. Rethrowing, not returning a
+failure value, is what makes the AI SDK treat the call as failed: it becomes
+a `tool-error` part in `step.content` on the server and an `output-error`
+tool part on the client, which is what the chip in `cece-message.tsx` keys
+off to render an X instead of a false success check. A tool error doesn't end
+the step loop or the stream, so the model still gets a turn to answer after
+seeing it. Sentry is injected rather than imported so the smoke script can
+load the adapter.
 
 ### Model and instructions — `lib/server/ai/cece/model.ts`
 
@@ -229,11 +239,16 @@ deleted.
    anything else is either a stale shape or a crafted one — e.g. a file part
    whose `url` is not a real URL, which `safeValidateUIMessages` accepts but
    `convertToModelMessages` then throws on; rejecting it here also closes a
-   server-side file-URL path in user messages); the newest message is not the
-   user's; its text exceeds 2,000 characters; or the serialized history
-   exceeds 100,000 characters — serialized rather than text, because a forged
-   history can stuff tool outputs as easily as text. `pathname`: string
-   starting with `/`, not `//` or `/\`, ≤200 chars; otherwise dropped.
+   server-side file-URL path in user messages); a message of *any* role holds
+   a `file` or `source-*` part (an assistant-role one in a forged history
+   could carry a url that the provider, not this server, would fetch when
+   converting to a model message — rejecting both part types regardless of
+   role closes that off for every role, not just the user's); the newest
+   message is not the user's; its text exceeds 2,000 characters; or the
+   serialized history exceeds 100,000 characters — serialized rather than
+   text, because a forged history can stuff tool outputs as easily as text.
+   `pathname`: string starting with `/`, not `//` or `/\`, ≤200 chars;
+   otherwise dropped.
 3. `convertToModelMessages(messages, { tools, ignoreIncompleteToolCalls: true })`
    runs in a try/catch **before** the cap is touched: a history that passes
    `safeValidateUIMessages` but still fails to convert (e.g. a forged tool
@@ -283,7 +298,11 @@ user id, and nothing writes.
   with a per-tool label ("Looking up your products…" / "Looked up your
   products"); a lookup that ends in `output-error` renders an X and "Couldn't
   look that up" instead — one shared failure label, not per-tool, since the
-  user doesn't need to know which lookup failed. Tool JSON is never shown.
+  user doesn't need to know which lookup failed. A chip that is in neither
+  `output-available` nor `output-error` while the message is no longer
+  streaming (Stop pressed mid-call, or the stream itself errored) renders a
+  muted `CircleSlash` icon and "Stopped" instead of spinning forever. Tool
+  JSON is never shown.
 - Empty state: a one-line greeting and starter prompts — "How do I publish a
   product?", "How are my sales this month?", "What should I do next?".
 - Errors: any non-OK response's body — Cece's own 401/429/400 message, or (the

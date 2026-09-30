@@ -3,7 +3,7 @@
 import type { ComponentProps } from "react"
 import Link from "next/link"
 import { getToolName, isToolUIPart, type UIMessage } from "ai"
-import { Check, Loader2, X } from "lucide-react"
+import { Check, CircleSlash, Loader2, X } from "lucide-react"
 import { Streamdown } from "streamdown"
 
 // Client-side copy of the tool names in lib/server/tools — the registry is
@@ -24,6 +24,11 @@ const FALLBACK_LABEL = { running: "Looking something up…", done: "Looked somet
 // Shared across tools rather than per-tool: the user doesn't need to know
 // which lookup failed, only that this one did.
 const TOOL_FAILURE_LABEL = "Couldn't look that up"
+
+// A tool part Stop (or a stream error) left in a non-final state. It is
+// neither "output-available" nor "output-error", so without this the chip
+// would spin forever on the generic running label.
+const STOPPED_LABEL = "Stopped"
 
 // A path on this app. `//` and `/\` are excluded because browsers read both
 // as the start of another host. The regex alone would accept inputs like
@@ -88,6 +93,9 @@ export function CeceMessage({
           const label = TOOL_LABELS[getToolName(part)] ?? FALLBACK_LABEL
           const failed = part.state === "output-error"
           const done = part.state === "output-available"
+          // Not streaming and not in a final state: Stop was pressed, or the
+          // stream errored, mid-call. It will never resolve on its own.
+          const stopped = !streaming && !failed && !done
           return (
             <span
               key={i}
@@ -97,10 +105,12 @@ export function CeceMessage({
                 <X className="size-3" />
               ) : done ? (
                 <Check className="size-3" />
+              ) : stopped ? (
+                <CircleSlash className="size-3" />
               ) : (
                 <Loader2 className="size-3 animate-spin" />
               )}
-              {failed ? TOOL_FAILURE_LABEL : done ? label.done : label.running}
+              {failed ? TOOL_FAILURE_LABEL : done ? label.done : stopped ? STOPPED_LABEL : label.running}
             </span>
           )
         }

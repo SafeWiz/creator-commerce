@@ -92,12 +92,22 @@ export async function handleCece(request: Request): Promise<Response> {
   // one — e.g. a file part whose `url` is not a real URL, which
   // `safeValidateUIMessages` accepts (it only checks the field is a string)
   // and which then throws inside `convertToModelMessages`. Rejecting it here
-  // closes the server-side file-URL path in user messages; an assistant-role
-  // file part can still carry a client-chosen URL.
+  // closes the server-side file-URL path in user messages.
   const hasNonTextUserPart = messages.some(
     (m) => m.role === 'user' && m.parts.some((part) => part.type !== 'text'),
   )
   if (hasNonTextUserPart) return fail('Invalid request.', 400)
+
+  // A `file` or `source-*` part on a message of any role — including an
+  // assistant-role one a forged history could carry — names a url that
+  // `convertToModelMessages` hands straight into the model message. It is
+  // the provider, not this server, that would fetch that url; rejecting
+  // both part types regardless of role closes that off for every role, not
+  // just the user's.
+  const hasUnproducedPart = messages.some((m) =>
+    m.parts.some((part) => part.type === 'file' || part.type.startsWith('source-')),
+  )
+  if (hasUnproducedPart) return fail('Invalid request.', 400)
 
   const last = messages.at(-1)
   if (last?.role !== 'user') return fail('Invalid request.', 400)
@@ -146,7 +156,7 @@ export async function handleCece(request: Request): Promise<Response> {
     tools,
     stopWhen: isStepCount(CECE_MAX_STEPS),
     maxOutputTokens: CECE_MAX_OUTPUT_TOKENS,
-    // Closing the panel or pressing Stop ends the model call too.
+    // Stop, or the client disconnecting, ends the model call too.
     abortSignal: request.signal,
     // Errors after the stream starts cannot become a status code — the 200 is
     // already sent. This is where they get reported instead.
