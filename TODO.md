@@ -347,3 +347,12 @@ ordered by `createdAt`, top 50, no pagination. Three known limits:
   `KpiCard`-style components where they fit. The tool outputs are the
   contract: a card only reads fields the tool already returns, and the model
   can then keep its text short and point at the card.
+- **MCP tool calls are not rate limited.** The MCP server (see its spec)
+  ships without a cap: the client's own model does the reasoning, so a call
+  costs us one bounded DB read, not model tokens. A looping agent can still
+  hammer the database under one user's token. When that matters, the cheap
+  version reuses what Cece already has — `ai_generations` with
+  `feature = 'mcp'` and `recordGenerationWithinLimit`, e.g. a few hundred
+  calls per user per 24h, with an over-limit call answered as an MCP tool
+  error rather than an HTTP failure. A per-minute burst limit is the same
+  helper with a one-minute `since`, at the cost of a row per call.
