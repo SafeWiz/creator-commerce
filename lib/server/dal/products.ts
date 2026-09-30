@@ -278,6 +278,60 @@ export async function getUserProducts(ownerId: string): Promise<Product[]> {
     )
 }
 
+// The seller's catalogue as an assistant reads it: enough to answer "what do I
+// have and what state is it in", and nothing that is a handle on the file.
+// fileKey in particular stays out — it is what download urls are signed from.
+export type OwnerProductSummary = {
+  id: number
+  name: string
+  status: ProductStatus
+  priceInCents: number
+  currency: string
+  updatedAt: Date
+  hasFile: boolean
+  imageCount: number
+}
+
+/**
+ * The owner's live products, most recently edited first, bounded.
+ *
+ * Unlike getUserProducts this takes a limit: its caller hands the rows to a
+ * model, and an unbounded catalogue is an unbounded prompt. `query` is a
+ * case-insensitive substring of the name, escaped the same way explore's is.
+ */
+export async function listOwnerProductSummaries(
+  ownerId: string,
+  options: { status?: ProductStatus; query?: string; limit: number },
+): Promise<OwnerProductSummary[]> {
+  const term = options.query?.trim()
+
+  return db
+    .select({
+      id: productsTable.id,
+      name: productsTable.name,
+      status: productsTable.status,
+      priceInCents: productsTable.priceInCents,
+      currency: productsTable.currency,
+      updatedAt: productsTable.updatedAt,
+      hasFile: sql<boolean>`${productsTable.fileKey} is not null`,
+      // cardinality, not array_length: it is 0 for an empty array rather than
+      // NULL.
+      imageCount: sql<number>`cardinality(${productsTable.images})`.mapWith(Number),
+    })
+    .from(productsTable)
+    .where(
+      and(
+        eq(productsTable.ownerId, ownerId),
+        isNull(productsTable.deletedAt),
+        // `and()` drops undefined entries, so an absent filter is no clause.
+        options.status ? eq(productsTable.status, options.status) : undefined,
+        term ? ilike(productsTable.name, `%${escapeLikePattern(term)}%`) : undefined,
+      ),
+    )
+    .orderBy(desc(productsTable.updatedAt), desc(productsTable.id))
+    .limit(options.limit)
+}
+
 /**
  * Owner-scoped soft delete: sets the tombstone instead of removing the row, so
  * purchases and downloads keep resolving. Returns null when nothing matched

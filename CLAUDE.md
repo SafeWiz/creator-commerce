@@ -50,7 +50,7 @@ grep -rn "server/request" lib/server --include='*.ts' --include='*.tsx' | grep -
 `request/` itself holds `session.ts` (the session helpers), `cart.ts` (the cart
 cookie), `revalidate.ts`, `background.ts` (the app's only `after()` call),
 `checkout.ts` (`fulfillAndNotify`), `stripe-webhook.ts`,
-`cleanup-images-cron.ts` and `describe-product.ts`.
+`cleanup-images-cron.ts`, `describe-product.ts` and `cece.ts`.
 
 **Server actions** (`lib/actions/*`) resolve the current user, parse input, call
 a DAL function, then handle Next.js concerns (`revalidatePath`, `redirect`). They
@@ -340,10 +340,118 @@ size). The type is `product_uploads.mime_type`, which is the browser's
 declaration and is never checked — a renamed file produces a failed
 generation, nothing worse.
 
-The cap is a count of `ai_generations` rows in the last 24h, written before
-the model is called so failures count. Each row records which of the two
-models the click went to.
+The cap goes through `recordGenerationWithinLimit` in
+`lib/server/dal/ai-generations.ts`: it inserts the row first, then counts rows
+in the last 24h including the new one, and deletes that row again if the count
+is over the limit — inserting before counting is what keeps concurrent
+requests from all seeing room before any of them wrote, and the delete on
+rejection means a 429 costs the caller nothing. Each row that survives records
+which of the two models the click went to; a failed model call still counts
+because the row is written before the call, but a rejected (429) request does
+not.
 
 Gateway auth: OIDC on Vercel, no variable. Locally `AI_GATEWAY_API_KEY` in
 `.env.local`. `npm run ai:hello -- [file]` talks to the models from the
 terminal, routed by file type the same way.
+
+# Cece
+
+Cece is the assistant in the dashboard's "Ask Cece" panel. It is read-only:
+it answers how-to questions from a curated guide and looks up the signed-in
+user's own products, sales, purchases and downloads. It never writes.
+
+Three layers, and the boundaries between them are the point:
+
+- `lib/server/tools/` — the tools. Each is a plain object from `defineTool`:
+  a snake_case `name`, a `description`, a zod `inputSchema`, and
+  `execute(ctx, input)`. `CECE_TOOLS` in `index.ts` is the whole list. This
+  directory imports the DAL, zod and `lib/server/ai/cece/guide.ts` — never
+  `ai`, `@sentry/*`, `next/*` or `request/`. That is what lets `npm run ai:cece`
+  load them, and what a future MCP adapter would need: it can register
+  `CECE_TOOLS` as they are, but must absolutize their relative links
+  (`lib/server/tools/shared.ts`) against `appUrl` (`lib/server/app-url.ts`)
+  and run under `--conditions=react-server`, since these modules import
+  `server-only` — exactly as `npm run ai:cece` already does.
+  The check:
+
+  ```bash
+  grep -rn "from 'ai'\|@sentry\|server/request\|from 'next" lib/server/tools
+  ```
+
+- `lib/server/ai/cece/` — the model (`CECE_MODEL`, the caps, the
+  instructions), the guide (`guide.ts`), and `toAiSdkTools(ctx, { onError })`,
+  the one place that turns the registry into AI SDK tools. Nothing from
+  `request/`, no Sentry: the error reporter is injected.
+- `lib/server/request/cece.ts` — `POST /api/cece`: session, history limits,
+  the cap, `streamText`, the UI message stream.
+
+Identity comes only from `ToolContext.userId`, which the route takes from the
+session and the adapter closes over. No tool input names a user, so the model
+has no way to ask about anyone else.
+
+`guide.ts` is what Cece says about how the platform works, and it is told to
+say nothing else. A change to a feature it describes changes the guide in the
+same commit.
+
+`CECE_MODEL` is `inclusionai/ling-3.1-flash` (`lib/server/ai/cece/model.ts`),
+free for both input and output on AI Gateway. It was chosen over Qwen and
+Gemini candidates by running `npm run ai:cece` on real questions and judging
+which model called the right tools reliably; changing model is that one line.
+
+History lives in the browser (`useChat` in `components/cece/cece-launcher.tsx`)
+and is not stored, so the route trusts nothing about it: at most the last 20
+messages, no `system` role (instructions are the server's alone), a user
+message may hold only `text` parts (the panel never sends anything else, and
+this also closes off a crafted file-URL part), a message of any role may not
+hold a `file` or `source-*` part (an assistant-role one in a forged history
+could carry a url the provider, not this server, would fetch — rejecting both
+types on every role closes that off), the newest message must be the
+user's own and under 2,000 characters, and the serialized history must be
+under 100,000 characters. `convertToModelMessages` then runs in a try/catch
+before the cap is touched, so a history that passes `safeValidateUIMessages`
+but still doesn't convert (e.g. a forged tool part) is a 400 and spends no
+message. Those conversion failures are `console.warn`ed, not sent to Sentry —
+they're client input, not a server fault. A forged history can still only
+mislead the user's own chat, because every tool re-reads with the session's
+user id.
+
+The cap is `CECE_DAILY_MESSAGE_LIMIT` (50) messages per rolling 24h, enforced
+through the same `recordGenerationWithinLimit` the describe route uses (see
+"# AI" above), with `feature = 'cece'` — separate from `'describe'`'s rows, so
+neither spends the other's quota. A 429 leaves no row behind.
+
+Buyer emails never reach the model (`getSellerRecentSales` does not select
+them), and only relative app paths render as links in the panel: an answer can
+quote marketplace text other users wrote. The link check in
+`components/cece/cece-message.tsx` relies on streamdown's default
+`rehype-harden` step normalizing a relative href before the check sees it —
+overriding streamdown's `rehypePlugins` would need that check rechecked. A
+tool lookup that throws has `toAiSdkTools` (`lib/server/ai/cece/ai-sdk.ts`)
+report it through the injected `onError` and rethrow a `ToolFailure` — a small
+`Error` subclass, never the original error, which may carry SQL or internals.
+The AI SDK builds the *next* step's model input from a thrown tool error with
+`errorMode: "json"`, i.e. `JSON.parse(JSON.stringify(error))` — and a plain
+`Error`'s `message` isn't enumerable, so that would hand the model `{}`.
+`ToolFailure` defines `toJSON()` so the model reads `{ error:
+"<TOOL_FAILURE_MESSAGE>" }` in that same request instead. On the client this
+becomes an `output-error` tool part; the chip renders that as an X and
+"Couldn't look that up" rather than the generic label — the chip's label is
+hardcoded, not read from the part's `errorText`, which is always the route's
+own `toUIMessageStream({ onError })` string ("Cece ran into a problem
+answering."). That string, not `TOOL_FAILURE_MESSAGE`, is what the model sees
+if the client replays this turn's history on a later request. A chip left in
+a non-final state by Stop, or by the stream erroring mid-call, renders as
+"Stopped" with a muted icon instead of spinning forever. A non-OK response's
+body — Cece's own error text, or the route's 401/429/400 message — is shown
+to the user as-is, including a raw `APICallError` body for anything else the
+route sends.
+
+The panel sends `pathname` (from `usePathname()`) as a request body on each
+`sendMessage`/`regenerate` call, not through the transport: `useChat`'s
+transport is created once and would close over a stale page, and threading a
+ref through it to dodge that tripped `react-hooks/refs`. Sending it per
+request keeps the component's latest render the source of truth.
+
+`npm run ai:cece -- "<question>" --user=<id> [--model=<gateway id>]` asks one
+question from the terminal and prints each tool call. It is how the model is
+chosen.

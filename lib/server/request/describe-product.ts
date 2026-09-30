@@ -8,7 +8,7 @@ import {
   descriptionModelFor,
   streamProductDescription,
 } from '@/lib/server/ai/product-description'
-import { countGenerationsSince, recordGeneration } from '@/lib/server/dal/ai-generations'
+import { recordGenerationWithinLimit } from '@/lib/server/dal/ai-generations'
 import { getOwnedUpload } from '@/lib/server/dal/products'
 import { getUser } from '@/lib/server/request/session'
 import { signProductFileUrl } from '@/lib/server/uploadthing'
@@ -47,13 +47,15 @@ export async function handleDescribeProduct(request: Request): Promise<Response>
   const upload = await getOwnedUpload(user.id, parsed.data.fileKey)
   if (!upload) return fail('File not found.', 404)
 
-  const used = await countGenerationsSince(user.id, new Date(Date.now() - DAY_MS))
-  if (used >= DAILY_GENERATION_LIMIT) {
-    return fail('Daily limit reached. Try again tomorrow.', 429)
-  }
   // Chosen once, so the row records the model the call actually goes to.
   const model = descriptionModelFor(upload)
-  await recordGeneration(user.id, model)
+  const withinLimit = await recordGenerationWithinLimit(user.id, model, 'describe', {
+    since: new Date(Date.now() - DAY_MS),
+    limit: DAILY_GENERATION_LIMIT,
+  })
+  if (!withinLimit) {
+    return fail('Daily limit reached. Try again tomorrow.', 429)
+  }
 
   // Signed only when it will be sent. Five minutes, like downloads — far
   // longer than the model needs to fetch it.

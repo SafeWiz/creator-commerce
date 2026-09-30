@@ -337,3 +337,22 @@ ordered by `createdAt`, top 50, no pagination. Three known limits:
 - **Two models where one would do.** Qwen rejects PDFs, so they go to Gemini.
   A single model that reads both, within the free credits, would remove
   `descriptionModelFor` and the second constant.
+- **Cece answers in prose where a card would do.** When a tool returns
+  something the app already has a visual for — a product (`get_my_product`,
+  `search_marketplace`), a sales summary, a purchase — the panel could render
+  a dedicated card from the tool part's `output` instead of leaving it to the
+  model to restate in text. `components/cece/cece-message.tsx` already
+  switches on tool parts (today it only draws a status chip), so a card is a
+  per-tool renderer keyed on the tool name, reusing `ProductCard` /
+  `KpiCard`-style components where they fit. The tool outputs are the
+  contract: a card only reads fields the tool already returns, and the model
+  can then keep its text short and point at the card.
+- **MCP tool calls are not rate limited.** The MCP server (see its spec)
+  ships without a cap: the client's own model does the reasoning, so a call
+  costs us one bounded DB read, not model tokens. A looping agent can still
+  hammer the database under one user's token. When that matters, the cheap
+  version reuses what Cece already has — `ai_generations` with
+  `feature = 'mcp'` and `recordGenerationWithinLimit`, e.g. a few hundred
+  calls per user per 24h, with an over-limit call answered as an MCP tool
+  error rather than an HTTP failure. A per-minute burst limit is the same
+  helper with a one-minute `since`, at the cost of a row per call.

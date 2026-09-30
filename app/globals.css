@@ -5,6 +5,7 @@
    prebuilt components. @source is required because Tailwind skips node_modules
    during content detection, so UploadThing's own class names would be purged. */
 @import "uploadthing/tw/v4";
+@source "../node_modules/streamdown/dist/*.js";
 @source "../node_modules/@uploadthing/react/dist";
 
 @custom-variant dark (&:is(.dark *));

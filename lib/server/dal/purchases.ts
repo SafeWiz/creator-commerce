@@ -209,6 +209,40 @@ export async function getSellerSales(sellerId: string): Promise<SellerSale[]> {
     .orderBy(desc(purchasesTable.createdAt), desc(purchasesTable.id))
 }
 
+// getSellerSales without the email, for callers that pass sales to a model.
+// The seller may see their buyers' addresses on /sales; sending them on to a
+// model provider is a disclosure the seller never made.
+export type SellerRecentSale = {
+  productName: string
+  priceInCents: number
+  createdAt: Date
+  buyerName: string
+}
+
+/** The seller's newest sales, bounded. Same filter as getSellerSales. */
+export async function getSellerRecentSales(
+  sellerId: string,
+  limit: number,
+): Promise<SellerRecentSale[]> {
+  return db
+    .select({
+      productName: purchasesTable.productName,
+      priceInCents: purchasesTable.priceInCents,
+      createdAt: purchasesTable.createdAt,
+      buyerName: user.name,
+    })
+    .from(purchasesTable)
+    .innerJoin(user, eq(user.id, purchasesTable.buyerId))
+    .where(
+      and(
+        eq(purchasesTable.sellerId, sellerId),
+        ne(purchasesTable.status, 'pending'),
+      ),
+    )
+    .orderBy(desc(purchasesTable.createdAt), desc(purchasesTable.id))
+    .limit(limit)
+}
+
 export type SellerTotals = {
   units: number
   revenueInCents: number
@@ -417,4 +451,23 @@ export async function getPurchasedProductIds(
     )
 
   return rows.map((row) => row.productId)
+}
+
+/**
+ * Whether the seller has ever been paid for anything. Paid only: a pending
+ * row is a checkout someone abandoned, not a first sale.
+ */
+export async function sellerHasSale(sellerId: string): Promise<boolean> {
+  const [row] = await db
+    .select({ id: purchasesTable.id })
+    .from(purchasesTable)
+    .where(
+      and(
+        eq(purchasesTable.sellerId, sellerId),
+        eq(purchasesTable.status, 'paid'),
+      ),
+    )
+    .limit(1)
+
+  return row != null
 }

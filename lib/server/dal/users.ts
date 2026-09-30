@@ -84,3 +84,25 @@ export async function getUserEmails(
 
   return new Map(rows.map((row) => [row.id, row.email]))
 }
+
+// What an assistant needs to talk about the user's own account. Not the
+// email: the user knows it, and nothing Cece does needs it.
+export type AccountBasics = {
+  name: string
+  handle: string
+  emailVerified: boolean
+}
+
+export async function getAccountBasics(userId: string): Promise<AccountBasics | null> {
+  const [found] = await db
+    .select({
+      name: user.name,
+      handle: user.handle,
+      emailVerified: user.emailVerified,
+    })
+    .from(user)
+    .where(eq(user.id, userId))
+    .limit(1)
+
+  return found ?? null
+}
