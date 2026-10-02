@@ -2,7 +2,11 @@ import 'server-only';
 
 import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
-import { APIError, createAuthMiddleware } from 'better-auth/api';
+import {
+  APIError,
+  createAuthMiddleware,
+  getSessionFromCtx,
+} from 'better-auth/api';
 import { expireCookie } from 'better-auth/cookies';
 import { nextCookies } from 'better-auth/next-js';
 import { mcp } from 'better-auth/plugins';
@@ -123,8 +127,51 @@ export const auth = betterAuth({
         }
       }
 
+      // /oauth2/consent (oAuthConsent in oidc-provider/index.mjs) only checks
+      // that *a* session exists (its `use: [sessionMiddleware]`) — it never
+      // compares the pending code's userId with the caller's. So a leaked
+      // consent_code (Referer, logs, analytics) lets any signed-in user Allow
+      // someone else's authorization, and the client ends up with a code bound
+      // to that other person's account. Resolves the code exactly as the
+      // endpoint does — ctx.body.consent_code, falling back to the signed
+      // oidc_consent_prompt cookie — and on a mismatch throws the same
+      // "Invalid code" shape the endpoint itself throws for an unknown or
+      // expired code, so a probe can't tell "not yours" from "invalid". The
+      // endpoint's sessionMiddleware hasn't run yet at this point in the
+      // pipeline, so the session is resolved here with getSessionFromCtx, the
+      // same helper the mcp plugin's own authorize handler uses.
+      async function refuseForeignConsent() {
+        if (ctx.path !== '/oauth2/consent') return;
+        let code =
+          typeof ctx.body?.consent_code === 'string'
+            ? ctx.body.consent_code
+            : null;
+        if (!code) {
+          const cookieValue = await ctx.getSignedCookie(
+            'oidc_consent_prompt',
+            ctx.context.secret,
+          );
+          if (typeof cookieValue === 'string') code = cookieValue;
+        }
+        if (!code) return;
+        const verification =
+          await ctx.context.internalAdapter.findVerificationValue(code);
+        if (!verification) return;
+        const value = JSON.parse(verification.value) as { userId?: string };
+        const session = await getSessionFromCtx(ctx);
+        if (!session) return;
+        if (value.userId !== session.user.id) {
+          throw new APIError('UNAUTHORIZED', {
+            error_description: 'Invalid code',
+            error: 'invalid_request',
+          });
+        }
+      }
+
       return (
-        (await forceConsentOnAuthorize()) ?? (await refuseUnconsentedToken())
+        (await forceConsentOnAuthorize()) ??
+        (await refuseUnconsentedToken()) ??
+        (await refuseForeignConsent())
       );
     }),
     // The plugin stores a pending authorization in this cookie on its way to

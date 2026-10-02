@@ -17,9 +17,9 @@ export const metadata: Metadata = {
   title: "Connect an app",
 }
 
-// Better Auth's mcp plugin sends the browser here with these three, after the
-// user has signed in. `scope` is not read: the access is the same fixed,
-// read-only set whatever a client asks for.
+// Better Auth's mcp plugin sends the browser here with these two, plus
+// `scope`, after the user has signed in. `scope` is not read: the access is
+// the same fixed, read-only set whatever a client asks for.
 const paramsSchema = z.object({
   consent_code: z.string().min(1).max(512),
   client_id: z.string().min(1).max(255),
