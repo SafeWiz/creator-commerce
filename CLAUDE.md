@@ -50,7 +50,7 @@ grep -rn "server/request" lib/server --include='*.ts' --include='*.tsx' | grep -
 `request/` itself holds `session.ts` (the session helpers), `cart.ts` (the cart
 cookie), `revalidate.ts`, `background.ts` (the app's only `after()` call),
 `checkout.ts` (`fulfillAndNotify`), `stripe-webhook.ts`,
-`cleanup-images-cron.ts`, `describe-product.ts` and `cece.ts`.
+`cleanup-images-cron.ts`, `describe-product.ts`, `cece.ts` and `mcp.ts`.
 
 **Server actions** (`lib/actions/*`) resolve the current user, parse input, call
 a DAL function, then handle Next.js concerns (`revalidatePath`, `redirect`). They
@@ -455,3 +455,95 @@ request keeps the component's latest render the source of truth.
 `npm run ai:cece -- "<question>" --user=<id> [--model=<gateway id>]` asks one
 question from the terminal and prints each tool call. It is how the model is
 chosen.
+
+# MCP
+
+`/api/mcp` serves Cece's tools to a user's own AI client (Claude, ChatGPT,
+Cursor) over MCP. It is the same registry, `CECE_TOOLS`, registered unchanged:
+what an MCP client can do is exactly what Cece can, read-only.
+
+- `lib/server/mcp/server.ts` — `registerCeceTools(server, ctx, { onError })`,
+  the MCP counterpart of `lib/server/ai/cece/ai-sdk.ts`. Each call returns the
+  tool's output as JSON text, every `*Link` field made absolute against
+  `appUrl` (`lib/server/mcp/links.ts` — a relative path means nothing outside
+  the app). A throw is reported through `onError` and returned as MCP's own
+  `isError` result carrying `TOOL_FAILURE_MESSAGE`
+  (`lib/server/tools/shared.ts`), the same sanitized line Cece's adapter
+  sends. Every tool is registered with `readOnlyHint: true`, which is what
+  lets a client skip asking the user before each call. No `request/`, no
+  Sentry — the error reporter is injected.
+- `lib/server/request/mcp.ts` — `handleMcp`: Better Auth's `withMcpAuth`
+  resolves the bearer token to `token.userId`, then builds an
+  `@modelcontextprotocol/server` server per request through `mcp-handler`'s
+  `createMcpHandler`, statelessly. No token → 401 with `WWW-Authenticate:
+  Bearer resource_metadata=…`, which is how a client finds where to
+  authorize. Mounted at `app/api/mcp/route.ts`; stateless serving has no
+  server stream or session to resume, so only `POST` does anything — `GET`
+  and `DELETE` are answered `405` by the SDK itself, not a gap in this app's
+  route.
+
+The two direct dependencies are `mcp-handler` and `@modelcontextprotocol/server`,
+both pinned to the 2.x line — the MCP SDK's v2, which `mcp-handler` 2.2 takes
+as its peer. `@modelcontextprotocol/sdk` (the v1 SDK) is not installed; nothing
+here uses it.
+
+Authorization is Better Auth's `mcp` plugin in `lib/server/auth.ts`: dynamic
+client registration, PKCE, tokens under `/api/auth/mcp/*`, discovery at
+`/.well-known/oauth-authorization-server` and
+`/.well-known/oauth-protected-resource`. Its tables are generated like every
+other auth table. Token lifetimes are Better Auth's own defaults, not
+overridden here: an access token lasts 1h, a refresh token 7d, an
+authorization code 10m. PKCE is required (`requirePKCE: true`); this app's
+discovery metadata advertises `S256` only, though the token exchange itself
+would still accept a client that registered `plain`. `/mcp/register` — the
+endpoint the discovery metadata actually points clients at — is
+unauthenticated and ignores `allowDynamicClientRegistration`: that flag only
+gates oidc-provider's own `/oauth2/register`, a route nothing here reaches
+(TODO.md).
+
+Three `hooks.before` on `auth.ts`, each named for what it refuses, all
+reading `ctx.context.internalAdapter` directly — internal Better Auth API
+with no stable contract, worth rechecking on an upgrade:
+
+- `forceConsentOnAuthorize` sets `prompt=consent` on `/mcp/authorize`. The
+  plugin shows `/oauth/consent` only when the authorize request's `prompt` is
+  exactly `consent`, and MCP clients don't send it. A client names itself
+  when it registers, so the user's Allow is the only check on it — skipping
+  consent would skip that check entirely.
+- `refuseUnconsentedToken` refuses a code presented at `/mcp/token` whose
+  pending verification value still has `requireConsent: true`. The library
+  never checks that flag at the token endpoint, only `/oauth2/consent` does —
+  and the pending code travels in the consent page's own url (Referer, logs,
+  analytics), so without this a client holding it could redeem a code before
+  anyone clicked Allow.
+- `refuseForeignConsent` refuses a code at `/oauth2/consent` whose `userId`
+  doesn't match the session user's. The library's own check there is only
+  that *a* session exists, not that it belongs to the code — without this, a
+  leaked consent code lets any signed-in user approve someone else's
+  authorization.
+
+One `hooks.after`, on `/mcp/authorize`, expires the plugin's
+`oidc_login_prompt` cookie: the plugin's own resume-after-sign-in arrives as
+a 302 that `fetch` follows silently, so the authorization was lost (observed
+in a real run). In its place, the login and signup pages read the pending
+authorize request off the query (`oauthAuthorizeQuery` /
+`OAUTH_AUTHORIZE_PATH` in `lib/schemas/auth.ts`), carry it across the link
+between the two pages, and after a successful sign-in or sign-up do a full
+`window.location.assign` to `/api/auth/mcp/authorize?<query>` — signed in by
+then, so the request continues on to consent. A new sign-in path needs the
+same handling.
+
+Consent is `app/(auth)/oauth/consent/`: a session is required (redirects to
+`/login` without one), the client's self-declared name comes from a DAL read
+(`getOAuthClientName`, `lib/server/dal/oauth-clients.ts`), and Allow/Deny post
+to `/api/auth/oauth2/consent`, following only an `http(s)` `redirectURI` it
+returns — a registered `javascript:` one cannot run here. `next.config.ts`
+sends `Referrer-Policy: no-referrer`, `Content-Security-Policy:
+frame-ancestors 'none'` and `X-Frame-Options: DENY` for that one route: its
+url carries a live authorization code, and its Allow button grants an outside
+app access to the account, so neither the url nor the page may leave it.
+
+Connect a client with the url `<appUrl>/api/mcp` — for Claude Code, `claude
+mcp add --transport http creator-commerce http://localhost:3000/api/mcp`; for
+a quick look, `npx @modelcontextprotocol/inspector`. There is no rate limit
+and no revocation UI yet (TODO.md).

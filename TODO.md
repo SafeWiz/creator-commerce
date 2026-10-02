@@ -350,9 +350,20 @@ ordered by `createdAt`, top 50, no pagination. Three known limits:
 - **MCP tool calls are not rate limited.** The MCP server (see its spec)
   ships without a cap: the client's own model does the reasoning, so a call
   costs us one bounded DB read, not model tokens. A looping agent can still
-  hammer the database under one user's token. When that matters, the cheap
-  version reuses what Cece already has — `ai_generations` with
-  `feature = 'mcp'` and `recordGenerationWithinLimit`, e.g. a few hundred
-  calls per user per 24h, with an over-limit call answered as an MCP tool
-  error rather than an HTTP failure. A per-minute burst limit is the same
-  helper with a one-minute `since`, at the cost of a row per call.
+  hammer the database under one user's token. `/mcp/register` has the same
+  gap one step earlier: it is unauthenticated — the route itself never checks
+  for a session, not a side effect of `allowDynamicClientRegistration` — and
+  every call writes an `oauth_application` row, so a rate limit on it, or a
+  periodic sweep of rows no user ever authorized, belongs next to the
+  tool-call cap. When that matters, the cheap version reuses what Cece
+  already has — `ai_generations` with `feature = 'mcp'` and
+  `recordGenerationWithinLimit`, e.g. a few hundred calls per user per 24h,
+  with an over-limit call answered as an MCP tool error rather than an HTTP
+  failure. A per-minute burst limit is the same helper with a one-minute
+  `since`, at the cost of a row per call.
+- **Connected MCP apps cannot be revoked from the app.** An approved client
+  keeps its tokens until they expire (Better Auth's defaults). A "Connected
+  apps" card on /settings would list `oauth_consent` rows with each client's
+  registered name and when it was approved, and Revoke would delete that
+  client's consent and access tokens for the user. The `connect-your-ai` guide
+  topic says this is not available yet; change it in the same commit.

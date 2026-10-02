@@ -1,5 +1,7 @@
 import 'server-only'
 
+import { appUrl } from '@/lib/server/app-url'
+
 /**
  * What Cece knows about how the platform works, one entry per topic.
  *
@@ -22,6 +24,7 @@ export const HELP_TOPIC_IDS = [
   'buying',
   'account',
   'analytics',
+  'connect-your-ai',
 ] as const
 
 export type HelpTopicId = (typeof HELP_TOPIC_IDS)[number]
@@ -90,5 +93,15 @@ Payouts: connecting your own Stripe account and scheduled payouts are not availa
 Conversion is unique buyers divided by unique people who viewed your storefront or a product page, or added one of your products to cart, over the last 30 days. Your own views while signed in are not counted. Visitors with ad blockers can buy without being counted as viewers, so the rate can read higher than reality; it is capped at 100%. It shows a dash when analytics is not set up.
 
 /sales shows all-time revenue and units.`,
+  },
+  'connect-your-ai': {
+    summary: 'Using Creator Commerce from Claude, ChatGPT or another AI app (MCP).',
+    content: `Any AI app that supports MCP connectors (Claude, ChatGPT, Cursor and others) can look things up in your account.
+
+1. In the app, add a custom connector or remote MCP server with the address ${appUrl}/api/mcp.
+2. The app opens a browser window. Sign in to Creator Commerce if asked, check the app's name, and choose Allow.
+3. The app can then look up what Cece can: your products, sales, purchases, downloads and account status, the platform guide, and marketplace search.
+
+Access is read-only: a connected app cannot change anything. Removing an app's access from within Creator Commerce is not available yet.`,
   },
 }
