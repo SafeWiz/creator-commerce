@@ -493,17 +493,21 @@ client registration, PKCE, tokens under `/api/auth/mcp/*`, discovery at
 `/.well-known/oauth-protected-resource`. Its tables are generated like every
 other auth table. Token lifetimes are Better Auth's own defaults, not
 overridden here: an access token lasts 1h, a refresh token 7d, an
-authorization code 10m. PKCE is required (`requirePKCE: true`); this app's
-discovery metadata advertises `S256` only, though the token exchange itself
-would still accept a client that registered `plain`. `/mcp/register` — the
+authorization code 10m. PKCE is required (`requirePKCE: true`), and `S256` is
+the only method accepted: `allowPlainCodeChallengeMethod` defaults to `false`
+and is not overridden in `oidcConfig`, so `/mcp/authorize` itself rejects a
+`code_challenge_method=plain` request before any code is issued — the
+discovery metadata's `S256`-only advertisement matches what's enforced.
+`/mcp/register` — the
 endpoint the discovery metadata actually points clients at — is
 unauthenticated and ignores `allowDynamicClientRegistration`: that flag only
 gates oidc-provider's own `/oauth2/register`, a route nothing here reaches
 (TODO.md).
 
-Three `hooks.before` on `auth.ts`, each named for what it refuses, all
-reading `ctx.context.internalAdapter` directly — internal Better Auth API
-with no stable contract, worth rechecking on an upgrade:
+Three `hooks.before` on `auth.ts`, each named for what it does. Two of the
+three, `refuseUnconsentedToken` and `refuseForeignConsent`, read
+`ctx.context.internalAdapter` directly — internal Better Auth API with no
+stable contract, worth rechecking on an upgrade:
 
 - `forceConsentOnAuthorize` sets `prompt=consent` on `/mcp/authorize`. The
   plugin shows `/oauth/consent` only when the authorize request's `prompt` is
