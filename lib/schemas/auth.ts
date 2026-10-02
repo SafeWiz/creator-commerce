@@ -66,3 +66,46 @@ export function authPathWithNext(path: '/login' | '/signup', next: string) {
     ? path
     : `${path}?next=${encodeURIComponent(next)}`
 }
+
+// The query Better Auth's mcp plugin sends a signed-out user to /login with:
+// its own authorize request, verbatim. Only these keys are carried back, so
+// nothing else the url holds rides along into the authorize endpoint.
+const OAUTH_AUTHORIZE_KEYS = [
+  'response_type',
+  'client_id',
+  'redirect_uri',
+  'scope',
+  'state',
+  'code_challenge',
+  'code_challenge_method',
+  'nonce',
+  'resource',
+] as const
+
+/**
+ * The OAuth authorize query an auth page arrived with, or null.
+ *
+ * Present when an MCP client's sign-in sent the user here. After signing in or
+ * up, the page navigates back to /api/auth/mcp/authorize with it: the user is
+ * signed in by then, so the authorization continues to the consent screen.
+ * The authorize endpoint itself validates the client and redirect_uri, so this
+ * only has to keep the request intact, not judge it.
+ */
+export function oauthAuthorizeQuery(
+  searchParams: Record<string, string | string[] | undefined>,
+): string | null {
+  const first = (key: string) => {
+    const value = searchParams[key]
+    return typeof value === 'string' ? value : undefined
+  }
+  if (first('response_type') !== 'code' || !first('client_id')) return null
+
+  const query = new URLSearchParams()
+  for (const key of OAUTH_AUTHORIZE_KEYS) {
+    const value = first(key)
+    if (value !== undefined) query.set(key, value.slice(0, 2048))
+  }
+  return query.toString()
+}
+
+export const OAUTH_AUTHORIZE_PATH = '/api/auth/mcp/authorize'

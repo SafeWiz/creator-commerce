@@ -6,14 +6,24 @@ import Link from "next/link"
 
 import { signUp } from "@/lib/client/auth"
 import { identifyUser } from "@/lib/client/posthog"
-import { authPathWithNext, PASSWORD_MIN_LENGTH } from "@/lib/schemas/auth"
+import {
+  authPathWithNext,
+  OAUTH_AUTHORIZE_PATH,
+  PASSWORD_MIN_LENGTH,
+} from "@/lib/schemas/auth"
 import { Button } from "@/components/ui/button"
 import { CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 
 // `next` arrives already validated from the page — see lib/schemas/auth.ts.
-export function SignupForm({ next }: { next: string }) {
+export function SignupForm({
+  next,
+  oauthQuery,
+}: {
+  next: string
+  oauthQuery: string | null
+}) {
   const router = useRouter()
   const [pending, setPending] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -42,6 +52,14 @@ export function SignupForm({ next }: { next: string }) {
     // created an account to buy is one person, and this is what says so.
     if (data?.user.id) {
       identifyUser(data.user.id)
+    }
+
+    // An app connecting over MCP sent the user here to sign up. Back to its
+    // authorize request, now signed in, which goes on to the consent screen.
+    // A full navigation: it is an API route that answers with a redirect.
+    if (oauthQuery) {
+      window.location.assign(`${OAUTH_AUTHORIZE_PATH}?${oauthQuery}`)
+      return
     }
 
     router.push(next)
@@ -101,7 +119,7 @@ export function SignupForm({ next }: { next: string }) {
         <p className="mt-1.5 text-center text-sm text-muted-foreground">
           Already have an account?{" "}
           <Link
-            href={authPathWithNext("/login", next)}
+            href={oauthQuery ? `/login?${oauthQuery}` : authPathWithNext("/login", next)}
             className="text-primary hover:underline"
           >
             Sign in

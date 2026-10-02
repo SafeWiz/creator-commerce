@@ -1,6 +1,6 @@
 import type { Metadata } from "next"
 
-import { nextPathSchema } from "@/lib/schemas/auth"
+import { nextPathSchema, oauthAuthorizeQuery } from "@/lib/schemas/auth"
 import {
   CardDescription,
   CardHeader,
@@ -16,10 +16,15 @@ export const metadata: Metadata = {
 export default async function LoginPage({
   searchParams,
 }: PageProps<"/login">) {
+  // Read once: both `next` and the oauth authorize query below come from it.
+  const params = await searchParams
   // Parsed here rather than with useSearchParams() in the form: the value is
   // validated before it ever reaches the client, and reading it on the server
   // avoids the Suspense boundary useSearchParams() would require.
-  const next = nextPathSchema.parse((await searchParams).next)
+  const next = nextPathSchema.parse(params.next)
+  // Set when an MCP client's sign-in sent the user here instead of `next` —
+  // see lib/schemas/auth.ts.
+  const oauthQuery = oauthAuthorizeQuery(params)
 
   return (
     <>
@@ -29,7 +34,7 @@ export default async function LoginPage({
           Sign in to your Creator Commerce account.
         </CardDescription>
       </CardHeader>
-      <LoginForm next={next} />
+      <LoginForm next={next} oauthQuery={oauthQuery} />
     </>
   )
 }

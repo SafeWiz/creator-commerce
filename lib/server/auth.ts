@@ -3,6 +3,7 @@ import 'server-only';
 import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { APIError, createAuthMiddleware } from 'better-auth/api';
+import { expireCookie } from 'better-auth/cookies';
 import { nextCookies } from 'better-auth/next-js';
 import { mcp } from 'better-auth/plugins';
 
@@ -125,6 +126,17 @@ export const auth = betterAuth({
       return (
         (await forceConsentOnAuthorize()) ?? (await refuseUnconsentedToken())
       );
+    }),
+    // The plugin stores a pending authorization in this cookie on its way to
+    // /login and resumes it from inside the next sign-in or sign-up response —
+    // as a 302 that fetch() follows silently, so the browser never leaves the
+    // form and the authorization is lost. Expiring the cookie switches that
+    // off; the login and signup pages carry the authorize params instead and
+    // navigate back to /mcp/authorize themselves (lib/schemas/auth.ts,
+    // oauthAuthorizeQuery).
+    after: createAuthMiddleware(async (ctx) => {
+      if (ctx.path !== '/mcp/authorize') return;
+      expireCookie(ctx, { name: 'oidc_login_prompt', attributes: { path: '/' } });
     }),
   },
   plugins: [

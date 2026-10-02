@@ -12,6 +12,21 @@ const nextConfig: NextConfig = {
     formats: ['image/avif', 'image/webp'],
     minimumCacheTTL: 2678400
   },
+  async headers() {
+    return [
+      {
+        // The consent page's url carries a pending authorization code, and its
+        // Allow button grants an outside app access to the account. Neither the
+        // url (Referer) nor the page (framing, clickjacking) may leave it.
+        source: '/oauth/consent',
+        headers: [
+          { key: 'Referrer-Policy', value: 'no-referrer' },
+          { key: 'Content-Security-Policy', value: "frame-ancestors 'none'" },
+          { key: 'X-Frame-Options', value: 'DENY' },
+        ],
+      },
+    ]
+  },
 };
 
 export default withSentryConfig(nextConfig, {
