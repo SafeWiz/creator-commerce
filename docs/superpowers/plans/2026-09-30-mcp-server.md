@@ -27,8 +27,7 @@
   - `@modelcontextprotocol/server@2.2.0` `McpServer.registerTool(name, { title?, description?, inputSchema?: <zod v4 object>, annotations?: ToolAnnotations }, cb: (input, ctx) => CallToolResult)`. A full `z.object(...)` is the non-deprecated `inputSchema` form.
   - Better Auth: `mcp`, `withMcpAuth`, `oAuthDiscoveryMetadata`, `oAuthProtectedResourceMetadata` exported from the `mcp` plugin. `withMcpAuth(auth, (req, token: OAuthAccessToken) => Response)`; on no/invalid token it answers 401 with `WWW-Authenticate: Bearer resource_metadata="<baseURL>/.well-known/oauth-protected-resource"` where baseURL is `appUrl + '/api/auth'`. Protected-resource metadata advertises `authorization_servers: [<origin>]`, so clients also fetch `<origin>/.well-known/oauth-authorization-server`.
   - Consent endpoint: `POST /api/auth/oauth2/consent` body `{ accept: boolean, consent_code?: string }` → JSON `{ redirectURI }` for both accept (with `code`) and deny (`error=access_denied`).
-  - The plugin's after-hook resumes a pending authorization on **any** response that sets a session cookie (sign-in, sign-up) when its signed `oidc_login_prompt` cookie is present (`mcp/index.mjs:150-180`).
-  - Better Auth's client follows a response body of `{ redirect: true, url }` by setting `window.location.href` (`better-auth/dist/client/fetch-plugins.mjs`).
+  - The plugin's after-hook resumes a pending authorization on **any** response that sets a session cookie (sign-in, sign-up) when its signed `oidc_login_prompt` cookie is present (`mcp/index.mjs:150-180`) — as an HTTP 302 on that response, which `fetch` follows silently (spike, Task 2 Step 9). Task 3 switches it off and carries the request through the auth pages instead.
 - Code comments and docs in English. UI copy in English.
 - No test runner exists. Tasks are verified with `npx tsc --noEmit`, `npm run lint` (Claude may run both), and the manual checks stated per task.
 - **Gabi runs** `npm install`, `npm run dev`, `npm run build`, every `schema:*` script, `npx @modelcontextprotocol/inspector`, `claude mcp add`, and curl against the dev server. Every "Gabi runs:" step means: stop, hand him the exact commands in order, wait for the output.
@@ -39,7 +38,7 @@
 | File | Status | Responsibility |
 |---|---|---|
 | `package.json`, `package-lock.json` | modify (Gabi installs) | `mcp-handler` (installed, uncommitted), `@modelcontextprotocol/server` |
-| `lib/server/auth.ts` | modify | `mcp` plugin; before-hook forcing consent |
+| `lib/server/auth.ts` | modify | `mcp` plugin; before-hooks forcing consent and refusing unconsented codes; after-hook expiring the plugin's resume cookie |
 | `lib/server/db/schemas/auth.ts` | generate | OAuth tables |
 | `drizzle/0012_*.sql` (+ meta) | generate | migration |
 | `app/.well-known/oauth-authorization-server/route.ts` | create | authorization-server metadata |
@@ -53,8 +52,9 @@
 | `lib/server/dal/oauth-clients.ts` | create | `getOAuthClientName` |
 | `app/(auth)/oauth/consent/page.tsx` | create | consent card (server) |
 | `app/(auth)/oauth/consent/consent-form.tsx` | create | Allow / Deny |
-| `lib/client/auth.ts` | modify | `isAuthRedirect` |
-| `app/(auth)/login/login-form.tsx`, `app/(auth)/signup/signup-form.tsx` | modify | follow the plugin's redirect |
+| `lib/schemas/auth.ts` | modify | `oauthAuthorizeQuery`, `OAUTH_AUTHORIZE_PATH` |
+| `app/(auth)/login/*`, `app/(auth)/signup/*` | modify | carry the authorize request, navigate back after sign-in |
+| `next.config.ts` | modify | consent page security headers |
 | `lib/server/ai/cece/guide.ts` | modify | `connect-your-ai` topic |
 | `CLAUDE.md`, `TODO.md`, the spec | modify | docs |
 
@@ -425,14 +425,16 @@ Controller writes both outcomes into the ledger before dispatching Task 3.
 **Files:**
 - Create: `lib/server/dal/oauth-clients.ts`
 - Create: `app/(auth)/oauth/consent/page.tsx`, `app/(auth)/oauth/consent/consent-form.tsx`
-- Modify: `lib/client/auth.ts`
-- Modify: `app/(auth)/login/login-form.tsx`, `app/(auth)/signup/signup-form.tsx`
+- Modify: `lib/server/auth.ts` (after-hook), `lib/schemas/auth.ts`, `next.config.ts`
+- Modify: `app/(auth)/login/page.tsx`, `app/(auth)/login/login-form.tsx`, `app/(auth)/signup/page.tsx`, `app/(auth)/signup/signup-form.tsx`
 
 **Interfaces:**
 - Consumes: the generated OAuth application table export (Task 1 Step 6 — expected `oauthApplication` with `clientId`, `name`); `POST /api/auth/oauth2/consent` (`{ accept, consent_code }` → `{ redirectURI }`); `getUser()` (`lib/server/request/session.ts`); Task 2 Step 9's spike outcome.
-- Produces: `getOAuthClientName(clientId: string): Promise<string | null>`; the `/oauth/consent` page; `isAuthRedirect(data: unknown): boolean` from `lib/client/auth.ts`.
+- Produces: `getOAuthClientName(clientId: string): Promise<string | null>`; the `/oauth/consent` page; `oauthAuthorizeQuery(searchParams): string | null` and `OAUTH_AUTHORIZE_PATH` from `lib/schemas/auth.ts`.
 
-The login handoff code below assumes the spike showed the sign-in response body carrying `{ redirect: true, url }` (which Better Auth's client already follows). If the controller's ledger records a different outcome, the controller replaces Step 4 before dispatch.
+**Spike outcome (Task 2 Step 9, 2026-10-01):** signed in → `/oauth/consent?…` as expected. Signed out → `/login?…`, sign in → **`/dashboard`**: the authorization was lost. Cause: the plugin's after-hook turns its resume into an HTTP 302 on the `sign-in/email` response (`better-auth/dist/api/dispatch.mjs` `runAfterHooks` → `toResponse`), which `fetch` follows internally; the form then `router.push(next)`es. So the handoff does not use the after-hook at all: our own after-hook on `/mcp/authorize` expires the plugin's `oidc_login_prompt` cookie, so its resume never fires and sign-in answers its normal JSON; the login and signup pages carry the authorize params and, after a successful sign-in or sign-up, do a full navigation back to `/api/auth/mcp/authorize?<params>` — now signed in, so the forced-consent path runs.
+
+**Also from Task 1's review:** the consent page sends `Referrer-Policy: no-referrer` and `Content-Security-Policy: frame-ancestors 'none'` (its URL carries the pending `consent_code`; its Allow button must not be clickjackable).
 
 - [ ] **Step 1: The client-name read**
 
@@ -609,52 +611,132 @@ export function ConsentForm({ consentCode }: { consentCode: string }) {
 }
 ```
 
-- [ ] **Step 4: Follow the plugin's redirect after sign-in and sign-up**
+- [ ] **Step 4: Turn off the plugin's in-response resume**
 
-Append to `lib/client/auth.ts`:
+In `lib/server/auth.ts`, add `import { expireCookie } from 'better-auth/cookies';` and, next to `hooks.before`, a `hooks.after`:
 
 ```ts
-/**
- * Whether an auth response is telling the browser to go somewhere else.
- *
- * Better Auth's mcp plugin answers a sign-in or sign-up with this when an MCP
- * client's authorization was waiting on it, and Better Auth's client has
- * already started navigating to `url` by the time the caller sees it.
- */
-export function isAuthRedirect(data: unknown): boolean {
-  return (
-    typeof data === 'object' &&
-    data !== null &&
-    'redirect' in data &&
-    (data as { redirect?: unknown }).redirect === true
-  )
-}
+    // The plugin stores a pending authorization in this cookie on its way to
+    // /login and resumes it from inside the next sign-in or sign-up response —
+    // as a 302 that fetch() follows silently, so the browser never leaves the
+    // form and the authorization is lost. Expiring the cookie switches that
+    // off; the login and signup pages carry the authorize params instead and
+    // navigate back to /mcp/authorize themselves (lib/schemas/auth.ts,
+    // oauthAuthorizeQuery).
+    after: createAuthMiddleware(async (ctx) => {
+      if (ctx.path !== '/mcp/authorize') return;
+      expireCookie(ctx, { name: 'oidc_login_prompt', attributes: { path: '/' } });
+    }),
 ```
 
-In `app/(auth)/login/login-form.tsx`, import it (`import { isAuthRedirect, signIn } from "@/lib/client/auth"`) and insert, after the `identifyUser` block and before `router.push(next)`:
+Confirm in `better-auth/dist/api/dispatch.mjs` (`runAfterHooks`, `mergeResponseHeaders`) that the after-hook runs when the authorize handler threw a redirect, and that its `Set-Cookie` is emitted **after** the plugin's own, so the expiry wins. If either is false, stop and report — do not ship a cookie hack that does not take.
+
+- [ ] **Step 5: Carry the authorize request through login and signup**
+
+Append to `lib/schemas/auth.ts`:
+
+```ts
+// The query Better Auth's mcp plugin sends a signed-out user to /login with:
+// its own authorize request, verbatim. Only these keys are carried back, so
+// nothing else the url holds rides along into the authorize endpoint.
+const OAUTH_AUTHORIZE_KEYS = [
+  'response_type',
+  'client_id',
+  'redirect_uri',
+  'scope',
+  'state',
+  'code_challenge',
+  'code_challenge_method',
+  'nonce',
+  'resource',
+] as const
+
+/**
+ * The OAuth authorize query an auth page arrived with, or null.
+ *
+ * Present when an MCP client's sign-in sent the user here. After signing in or
+ * up, the page navigates back to /api/auth/mcp/authorize with it: the user is
+ * signed in by then, so the authorization continues to the consent screen.
+ * The authorize endpoint itself validates the client and redirect_uri, so this
+ * only has to keep the request intact, not judge it.
+ */
+export function oauthAuthorizeQuery(
+  searchParams: Record<string, string | string[] | undefined>,
+): string | null {
+  const first = (key: string) => {
+    const value = searchParams[key]
+    return typeof value === 'string' ? value : undefined
+  }
+  if (first('response_type') !== 'code' || !first('client_id')) return null
+
+  const query = new URLSearchParams()
+  for (const key of OAUTH_AUTHORIZE_KEYS) {
+    const value = first(key)
+    if (value !== undefined) query.set(key, value.slice(0, 2048))
+  }
+  return query.toString()
+}
+
+export const OAUTH_AUTHORIZE_PATH = '/api/auth/mcp/authorize'
+```
+
+In `app/(auth)/login/page.tsx`: read the params once (`const params = await searchParams`), keep `next` from `params.next`, compute `const oauthQuery = oauthAuthorizeQuery(params)`, and pass `oauthQuery={oauthQuery}` to `<LoginForm>`. Same in `app/(auth)/signup/page.tsx` for `<SignupForm>` (read it first; mirror whatever it already does with `next`).
+
+In `app/(auth)/login/login-form.tsx`:
+- Props become `{ next, oauthQuery }: { next: string; oauthQuery: string | null }`.
+- After the `identifyUser` block, before `router.push(next)`:
 
 ```tsx
-    // An app connecting over MCP was waiting on this sign-in, and Better
-    // Auth's client is already on its way to the consent screen. Pushing to
-    // `next` would race it.
-    if (isAuthRedirect(data)) return
+    // An app connecting over MCP sent the user here to sign in. Back to its
+    // authorize request, now signed in, which goes on to the consent screen.
+    // A full navigation: it is an API route that answers with a redirect.
+    if (oauthQuery) {
+      window.location.assign(`${OAUTH_AUTHORIZE_PATH}?${oauthQuery}`)
+      return
+    }
 ```
 
-In `app/(auth)/signup/signup-form.tsx`, the same import (`isAuthRedirect, signUp`) and the same four lines in the same place.
+- The "Create an account" link keeps the request: `href={oauthQuery ? `/signup?${oauthQuery}` : authPathWithNext("/signup", next)}`.
 
-- [ ] **Step 5: Typecheck and lint**
+In `app/(auth)/signup/signup-form.tsx`: the same prop, the same block in the same place, and its link to `/login` keeps the request the same way (`oauthQuery ? `/login?${oauthQuery}` : …` around its existing `authPathWithNext("/login", next)`). Import `oauthAuthorizeQuery`/`OAUTH_AUTHORIZE_PATH` from `@/lib/schemas/auth` where used.
+
+- [ ] **Step 6: Consent page headers**
+
+In `next.config.ts`, add to `nextConfig`:
+
+```ts
+  async headers() {
+    return [
+      {
+        // The consent page's url carries a pending authorization code, and its
+        // Allow button grants an outside app access to the account. Neither the
+        // url (Referer) nor the page (framing, clickjacking) may leave it.
+        source: '/oauth/consent',
+        headers: [
+          { key: 'Referrer-Policy', value: 'no-referrer' },
+          { key: 'Content-Security-Policy', value: "frame-ancestors 'none'" },
+          { key: 'X-Frame-Options', value: 'DENY' },
+        ],
+      },
+    ]
+  },
+```
+
+Check `node_modules/next/dist/docs/` for the `headers()` config in this Next version before writing it.
+
+- [ ] **Step 7: Typecheck and lint**
 
 Run: `npx tsc --noEmit && npm run lint`
 Expected: no errors.
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 8: Commit**
 
 ```bash
-git add lib/server/dal/oauth-clients.ts "app/(auth)/oauth" lib/client/auth.ts "app/(auth)/login/login-form.tsx" "app/(auth)/signup/signup-form.tsx"
+git add lib/server/dal/oauth-clients.ts "app/(auth)/oauth" lib/server/auth.ts lib/schemas/auth.ts "app/(auth)/login" "app/(auth)/signup" next.config.ts
 git commit -m "feat(mcp): consent screen and the sign-in handoff"
 ```
 
-- [ ] **Step 7: Gabi runs: the whole flow** (with `npm run dev` and the Inspector as in Task 2 Step 9)
+- [ ] **Step 9: Gabi runs: the whole flow** (with `npm run dev` and the Inspector as in Task 2 Step 9)
 
 1. Signed in → Quick OAuth Flow → consent card names the Inspector's client → **Allow** → Inspector shows a token. **Connect**, **List Tools**: nine tools, each marked read-only.
 2. Call `get_account_status`, `list_my_products`, `search_marketplace` (`query: "preset"`): outputs are JSON text; every `*Link` is `http://localhost:3000/…`; no `@` email anywhere.
@@ -743,10 +825,15 @@ request's `prompt` is exactly `consent`, which MCP clients do not send; a
 registers, so the user's Allow is the only check on it — do not remove the
 hook to save a click.
 
-Signing in or signing up with an authorization pending is resumed by the
-plugin inside that same response, and Better Auth's client navigates onward
-itself. The login and signup forms check `isAuthRedirect(data)` and skip their
-own `router.push` in that case; a new sign-in path needs the same check.
+A signed-out user is sent to `/login` with the authorize request in the
+query. The plugin would resume it from inside the sign-in response, but as a
+302 that `fetch` follows silently, so the authorization was lost; a
+`hooks.after` on `/mcp/authorize` expires the plugin's `oidc_login_prompt`
+cookie to switch that off. Instead the login and signup pages read the request
+(`oauthAuthorizeQuery` in `lib/schemas/auth.ts`), carry it across the link
+between them, and after success do a full navigation back to
+`/api/auth/mcp/authorize` — signed in now, so it goes on to consent. A new
+sign-in path needs the same handling.
 
 Connect a client with the url `<appUrl>/api/mcp` — for Claude Code,
 `claude mcp add --transport http creator-commerce http://localhost:3000/api/mcp`;
