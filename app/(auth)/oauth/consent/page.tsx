@@ -2,7 +2,7 @@ import type { Metadata } from "next"
 import { redirect } from "next/navigation"
 import { z } from "zod"
 
-import { getOAuthClient } from "@/lib/server/dal/oauth-clients"
+import { getPendingConsent } from "@/lib/server/dal/oauth-clients"
 import { getUser } from "@/lib/server/request/session"
 import {
   CardContent,
@@ -17,12 +17,13 @@ export const metadata: Metadata = {
   title: "Connect an app",
 }
 
-// Better Auth's mcp plugin sends the browser here with these two, plus
-// `scope`, after the user has signed in. `scope` is not read: the access is
-// the same fixed, read-only set whatever a client asks for.
+// Better Auth's mcp plugin sends the browser here with this, plus `client_id`
+// and `scope`, after the user has signed in. Neither of those is read: the
+// client and the redirect target it shows come from the pending consent row
+// the code itself points at (getPendingConsent), not the url, and the access
+// is the same fixed, read-only set whatever a client asks for.
 const paramsSchema = z.object({
   consent_code: z.string().min(1).max(512),
-  client_id: z.string().min(1).max(255),
 })
 
 export default async function ConsentPage({
@@ -35,13 +36,17 @@ export default async function ConsentPage({
   const user = await getUser()
   if (!user) redirect("/login")
 
-  // A client that never registered (or whose row is gone) keeps the
-  // "expired" card — nothing was approved, so nothing to show. A client that
-  // registered without a name, or with an empty string, is a different case:
-  // it exists, so it gets "An unnamed app" instead.
-  const client = params.success ? await getOAuthClient(params.data.client_id) : null
+  // getPendingConsent reads the client and the destination off the code's
+  // own pending verification row, scoped to this user — a code that's
+  // missing, expired, or bound to someone else, or whose client row is gone,
+  // all collapse to the same "expired" card below. A client that registered
+  // without a name, or with an empty string, is a different case: it exists,
+  // so it gets "An unnamed app" instead.
+  const pending = params.success
+    ? await getPendingConsent(params.data.consent_code, user.id)
+    : null
 
-  if (!params.success || !client) {
+  if (!params.success || !pending) {
     return (
       <CardHeader>
         <CardTitle className="text-xl">This link has expired</CardTitle>
@@ -52,7 +57,7 @@ export default async function ConsentPage({
     )
   }
 
-  const name = client.name && client.name.length > 0 ? client.name : "An unnamed app"
+  const name = pending.name && pending.name.length > 0 ? pending.name : "An unnamed app"
 
   return (
     <>
@@ -70,17 +75,9 @@ export default async function ConsentPage({
           The name is chosen by the app itself. Only allow apps you set up
           yourself, signed in as {user.email}.
         </p>
-        {client.redirectTargets.length > 0 && (
+        {pending.target && (
           <p className="text-sm text-muted-foreground">
-            After you allow, you&rsquo;ll be sent to{" "}
-            {client.redirectTargets.map((target, index) => (
-              <span key={target}>
-                {index > 0 &&
-                  (index === client.redirectTargets.length - 1 ? " or " : ", ")}
-                <strong>{target}</strong>
-              </span>
-            ))}
-            .
+            After you allow, you&rsquo;ll be sent to <strong>{pending.target}</strong>.
           </p>
         )}
         <ConsentForm consentCode={params.data.consent_code} />

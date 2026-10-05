@@ -121,9 +121,14 @@ export const auth = betterAuth({
       // fields when those scopes are present in what was actually granted.
       async function forceConsentOnAuthorize() {
         if (ctx.path !== '/mcp/authorize') return;
-        const requested = (ctx.query?.scope ?? '')
-          .split(' ')
-          .filter(Boolean);
+        // A client can repeat `?scope=` in the query string, and depending
+        // on how the framework parsed it ctx.query.scope then arrives as an
+        // array rather than a string — `.split` throws on an array. Taking
+        // the first value mirrors how a single scope is read everywhere else
+        // in this pipeline (authorize.mjs's own `query.scope?.split(' ')`).
+        const rawScope = ctx.query?.scope;
+        const scopeParam = (Array.isArray(rawScope) ? rawScope[0] : rawScope) ?? '';
+        const requested = scopeParam.split(' ').filter(Boolean);
         const allowed = requested.filter(
           (scope: string) => scope === 'openid' || scope === 'offline_access',
         );

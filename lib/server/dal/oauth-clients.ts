@@ -1,9 +1,13 @@
 import 'server-only'
 
-import { eq } from 'drizzle-orm'
+import { desc, eq } from 'drizzle-orm'
 
 import db from '@/lib/server/db'
-import { oauthAccessToken, oauthApplication } from '@/lib/server/db/schemas/auth'
+import {
+  oauthAccessToken,
+  oauthApplication,
+  verification,
+} from '@/lib/server/db/schemas/auth'
 
 const DANGEROUS_SCHEMES = new Set(['javascript:', 'data:', 'vbscript:'])
 const MAX_NAME_LENGTH = 80
@@ -35,37 +39,75 @@ function redirectTarget(url: string): string | null {
 }
 
 /**
- * The OAuth client's self-declared name and registered redirect targets, for
- * the consent screen.
+ * The pending authorization a `consent_code` points at, for the consent
+ * screen — the client's self-declared name and the single redirect target
+ * `/mcp/authorize` actually matched, never the full list a client registered
+ * and never the url's own `client_id`.
  *
- * The name is self-declared: MCP clients register dynamically and choose
- * this string, so the page shows it as the app's own claim, never as
- * something we vouch for. `redirectUrls` is stored comma-joined (the mcp
- * plugin's own format, split with `.split(',')` wherever it reads the
- * column), so a client that registered more than one redirect url shows more
- * than one target.
+ * `/oauth/consent` only has the url Better Auth built for it
+ * (`authorize.mjs`'s `consentURI`), and that url's `client_id` is exactly the
+ * one its own `redirectURI` was matched against — but trusting it anyway
+ * would let a client that registered a second, unrelated redirect url (or,
+ * in principle, a mismatched `client_id` on the url) dilute or misattribute
+ * the warning the page shows. The pending verification row is the one thing
+ * `/mcp/authorize` itself wrote, so both the name and the destination are
+ * read off it instead: `clientId` and `redirectURI` from its JSON `value`
+ * (the same shape `refuseForeignConsent` in `lib/server/auth.ts` already
+ * reads through `ctx.context.internalAdapter.findVerificationValue`, which a
+ * page can't call).
+ *
+ * `verification.identifier` holds `consent_code` as issued, not hashed: this
+ * app's Better Auth config sets no `verification.storeIdentifier`, so
+ * `processIdentifier` (`better-auth/dist/db/verification-token-storage.mjs`)
+ * takes its default, unhashed branch.
+ *
+ * Returns `null` for a code that's missing, expired, or bound to a different
+ * user — the three cases the caller folds into the same "This link has
+ * expired" card — and also when the client row itself is gone, the same as
+ * the old `getOAuthClient` did.
  */
-export async function getOAuthClient(
-  clientId: string,
-): Promise<{ name: string | null; redirectTargets: string[] } | null> {
-  const [row] = await db
-    .select({ name: oauthApplication.name, redirectUrls: oauthApplication.redirectUrls })
-    .from(oauthApplication)
-    .where(eq(oauthApplication.clientId, clientId))
+export async function getPendingConsent(
+  consentCode: string,
+  userId: string,
+): Promise<{ name: string | null; target: string | null } | null> {
+  // Mirrors findVerificationValue's own `orderBy desc(createdAt) limit 1`:
+  // identifier isn't unique in the schema, so this is the same tie-break the
+  // library itself would apply, not a new assumption.
+  const [pending] = await db
+    .select({ value: verification.value, expiresAt: verification.expiresAt })
+    .from(verification)
+    .where(eq(verification.identifier, consentCode))
+    .orderBy(desc(verification.createdAt))
     .limit(1)
 
-  if (!row) return null
+  if (!pending || pending.expiresAt < new Date()) return null
 
-  const redirectTargets = (row.redirectUrls ?? '')
-    .split(',')
-    .map((url) => url.trim())
-    .filter(Boolean)
-    .map(redirectTarget)
-    .filter((target): target is string => target !== null)
+  let value: { clientId?: unknown; redirectURI?: unknown; userId?: unknown }
+  try {
+    value = JSON.parse(pending.value)
+  } catch {
+    return null
+  }
+
+  if (
+    value.userId !== userId ||
+    typeof value.clientId !== 'string' ||
+    typeof value.redirectURI !== 'string'
+  ) {
+    return null
+  }
+
+  const [client] = await db
+    .select({ name: oauthApplication.name })
+    .from(oauthApplication)
+    .where(eq(oauthApplication.clientId, value.clientId))
+    .limit(1)
+
+  if (!client) return null
 
   return {
-    name: row.name ? truncateName(row.name) : null,
-    redirectTargets,
+    name: client.name ? truncateName(client.name) : null,
+    target: redirectTarget(value.redirectURI),
   }
 }
 
