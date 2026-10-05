@@ -2,9 +2,18 @@ import 'server-only';
 
 import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
+import {
+  APIError,
+  createAuthMiddleware,
+  getSessionFromCtx,
+  isAPIError,
+} from 'better-auth/api';
+import { expireCookie } from 'better-auth/cookies';
 import { nextCookies } from 'better-auth/next-js';
+import { mcp } from 'better-auth/plugins';
 
 import { appOrigins, appUrl } from '@/lib/server/app-url';
+import { deleteUserOAuthTokens } from '@/lib/server/dal/oauth-clients';
 import db from '@/lib/server/db';
 import * as authSchema from '@/lib/server/db/schemas/auth';
 import {
@@ -25,6 +34,16 @@ export const auth = betterAuth({
   // "Invalid origin".
   baseURL: appUrl,
   trustedOrigins: appOrigins,
+  // getMcpSession (plugins/mcp/index.mjs) answers with the whole
+  // oauth_access_token row, refreshToken included, and is mounted at
+  // /mcp/get-session with no auth of its own. withMcpAuth calls
+  // auth.api.getMcpSession(...) directly — the generated endpoint, not the
+  // router — so it is unaffected: disabledPaths is only checked in the
+  // router's onRequest (api/index.mjs), which is the HTTP dispatch path
+  // (app/api/auth/[...all]/route.ts), never auth.api.* calls. This closes
+  // the only way a bearer token holder could read their own refresh token
+  // over HTTP without otherwise affecting token verification.
+  disabledPaths: ['/mcp/get-session'],
   advanced: {
     // Better Auth awaits its email hooks inline unless a handler is set, so
     // without this every signup and reset request blocks on the SMTP handshake.
@@ -50,6 +69,12 @@ export const auth = betterAuth({
     // is that someone else has access, and leaving their existing session alive
     // through the reset that is meant to lock them out defeats the point.
     revokeSessionsOnPasswordReset: true,
+    // revokeSessionsOnPasswordReset only touches sessions, never the
+    // oauth_access_token rows an MCP client holds — those survive a reset
+    // untouched otherwise. The same "someone else has access" reasoning
+    // applies: a reset exists to lock out whoever else had it, including a
+    // client that authorized itself before the reset.
+    onPasswordReset: ({ user }) => deleteUserOAuthTokens(user.id),
   },
   emailVerification: {
     sendOnSignUp: true,
@@ -76,7 +101,193 @@ export const auth = betterAuth({
   // Password capped near 500/day, so under-counting there is the risk, not a
   // convenience. Database storage shares one counter across instances.
   rateLimit: { storage: 'database' },
-  // nextCookies must be the last plugin: it lets server actions set
-  // auth cookies via next/headers.
-  plugins: [nextCookies()],
+  hooks: {
+    before: createAuthMiddleware(async (ctx) => {
+      // An MCP client registers itself and picks its own name, so the user's
+      // Allow is the only check on it. The mcp plugin shows its consent page
+      // only when the authorize request carries prompt=consent — compared
+      // exactly, so it is set rather than appended — and most MCP clients
+      // never send it. Setting it here, before the plugin reads the query,
+      // also covers the signed-out path: the plugin stores this query in a
+      // cookie on its way to /login and replays it after sign-in.
+      //
+      // Narrowing scope lives in the same hook because it has to run before
+      // the same read: no tool a connected client can reach — Cece's own —
+      // needs the caller's email or name, and the spec promises a client
+      // never receives either. Keeping only openid (identifies the user to
+      // the client) and offline_access (refresh tokens) means /mcp/token's
+      // id_token carries no email or name claims no matter what a client
+      // requests — mcp/index.mjs's userClaims only adds its profile/email
+      // fields when those scopes are present in what was actually granted.
+      async function forceConsentOnAuthorize() {
+        if (ctx.path !== '/mcp/authorize') return;
+        // A client can repeat `?scope=` in the query string, and depending
+        // on how the framework parsed it ctx.query.scope then arrives as an
+        // array rather than a string — `.split` throws on an array. Taking
+        // the first value mirrors how a single scope is read everywhere else
+        // in this pipeline (authorize.mjs's own `query.scope?.split(' ')`).
+        const rawScope = ctx.query?.scope;
+        const scopeParam = (Array.isArray(rawScope) ? rawScope[0] : rawScope) ?? '';
+        const requested = scopeParam.split(' ').filter(Boolean);
+        const allowed = requested.filter(
+          (scope: string) => scope === 'openid' || scope === 'offline_access',
+        );
+        const scope = (allowed.length > 0 ? allowed : ['openid']).join(' ');
+        return {
+          context: { query: { ...ctx.query, prompt: 'consent', scope } },
+        };
+      }
+
+      // The consent forced above stores requireConsent: true on the pending
+      // code until /oauth2/consent flips it to false on Allow (see
+      // oidc-provider/index.mjs's oAuthConsent handler). But /mcp/token's own
+      // exchange (mcpOAuthToken in better-auth/dist/plugins/mcp/index.mjs)
+      // never reads that flag — only /oauth2/consent does. So a client
+      // holding a code's PKCE verifier and the consent_code shown in the
+      // /oauth/consent URL (leaked via Referer, logs or analytics) could
+      // redeem it at /mcp/token before anyone clicks Allow. Reject it here,
+      // with the same invalid_grant shape the token endpoint itself uses for
+      // a bad code, so a legitimate exchange — which always runs after
+      // requireConsent has been cleared — is unaffected.
+      async function refuseUnconsentedToken() {
+        if (ctx.path !== '/mcp/token') return;
+        if (ctx.body?.grant_type !== 'authorization_code') return;
+        const code = ctx.body?.code;
+        if (typeof code !== 'string') return;
+        const verification =
+          await ctx.context.internalAdapter.findVerificationValue(code);
+        if (!verification) return;
+        const value = JSON.parse(verification.value) as {
+          requireConsent?: boolean;
+        };
+        // Fails closed: every legitimate code carries an explicit boolean —
+        // oidc-provider sets requireConsent: false on Allow
+        // (oidc-provider/index.mjs) and authorize.mjs sets it to a boolean
+        // (query.prompt === 'consent') on every code it creates, consented
+        // or not. Checking !== false, not the truthy check this replaced,
+        // means a future library upgrade that renames or drops the field
+        // rejects the code instead of silently treating a missing flag as
+        // consent given.
+        if (value.requireConsent !== false) {
+          throw new APIError('UNAUTHORIZED', {
+            error_description: 'invalid code',
+            error: 'invalid_grant',
+          });
+        }
+      }
+
+      // /oauth2/consent (oAuthConsent in oidc-provider/index.mjs) only checks
+      // that *a* session exists (its `use: [sessionMiddleware]`) — it never
+      // compares the pending code's userId with the caller's. So a leaked
+      // consent_code (Referer, logs, analytics) lets any signed-in user Allow
+      // someone else's authorization, and the client ends up with a code bound
+      // to that other person's account. Resolves the code exactly as the
+      // endpoint does — ctx.body.consent_code, falling back to the signed
+      // oidc_consent_prompt cookie — and on a mismatch throws the same
+      // "Invalid code" shape the endpoint itself throws for an unknown or
+      // expired code, so a probe can't tell "not yours" from "invalid". The
+      // endpoint's sessionMiddleware hasn't run yet at this point in the
+      // pipeline, so the session is resolved here with getSessionFromCtx, the
+      // same helper the mcp plugin's own authorize handler uses.
+      async function refuseForeignConsent() {
+        if (ctx.path !== '/oauth2/consent') return;
+        let code =
+          typeof ctx.body?.consent_code === 'string'
+            ? ctx.body.consent_code
+            : null;
+        if (!code) {
+          const cookieValue = await ctx.getSignedCookie(
+            'oidc_consent_prompt',
+            ctx.context.secret,
+          );
+          if (typeof cookieValue === 'string') code = cookieValue;
+        }
+        if (!code) return;
+        const verification =
+          await ctx.context.internalAdapter.findVerificationValue(code);
+        if (!verification) return;
+        const value = JSON.parse(verification.value) as { userId?: string };
+        const session = await getSessionFromCtx(ctx);
+        if (!session) return;
+        if (value.userId !== session.user.id) {
+          throw new APIError('UNAUTHORIZED', {
+            error_description: 'Invalid code',
+            error: 'invalid_request',
+          });
+        }
+      }
+
+      return (
+        (await forceConsentOnAuthorize()) ??
+        (await refuseUnconsentedToken()) ??
+        (await refuseForeignConsent())
+      );
+    }),
+    after: createAuthMiddleware(async (ctx) => {
+      // The plugin stores a pending authorization in this cookie on its way
+      // to /login and resumes it from inside the next sign-in or sign-up
+      // response — as a 302 that fetch() follows silently, so the browser
+      // never leaves the form and the authorization is lost. Expiring the
+      // cookie switches that off; the login and signup pages carry the
+      // authorize params instead and navigate back to /mcp/authorize
+      // themselves (lib/schemas/auth.ts, oauthAuthorizeQuery).
+      async function expireLoginPromptCookie() {
+        if (ctx.path !== '/mcp/authorize') return;
+        expireCookie(ctx, {
+          name: 'oidc_login_prompt',
+          attributes: { path: '/' },
+        });
+      }
+
+      // The library never rotates a refresh token on use (the refresh grant
+      // in mcp/index.mjs inserts a new oauthAccessToken row and leaves the
+      // old one's refreshToken valid until it expires on its own, 7 days
+      // later) — so a refresh token that leaked once would keep working in
+      // parallel with the legitimate client for up to a week. Deleting the
+      // presented token's row after a successful exchange closes that: the
+      // next use of the same old token finds no row and fails, while the
+      // newly issued row (a different refreshToken value, inserted before
+      // this hook runs) survives untouched. ctx.context.returned is the
+      // endpoint's resolved response at this point in the pipeline
+      // (api/dispatch.mjs sets it right before running after-hooks); a
+      // thrown APIError — a bad or reused token, a client mismatch — ends
+      // up there too, so isAPIError is what tells a successful exchange from
+      // a rejected one.
+      async function rotateRefreshTokenOnUse() {
+        if (ctx.path !== '/mcp/token') return;
+        if (ctx.body?.grant_type !== 'refresh_token') return;
+        if (isAPIError(ctx.context.returned)) return;
+        const presentedToken = ctx.body?.refresh_token;
+        if (typeof presentedToken !== 'string') return;
+        await ctx.context.adapter.delete({
+          model: 'oauthAccessToken',
+          where: [{ field: 'refreshToken', value: presentedToken }],
+        });
+      }
+
+      await expireLoginPromptCookie();
+      await rotateRefreshTokenOnUse();
+    }),
+  },
+  plugins: [
+    // Makes this app an OAuth 2.1 authorization server for MCP clients
+    // (Claude, ChatGPT, Cursor…): dynamic client registration, PKCE, tokens.
+    // /api/mcp checks those tokens with withMcpAuth.
+    mcp({
+      loginPage: '/login',
+      oidcConfig: {
+        loginPage: '/login',
+        consentPage: '/oauth/consent',
+        requirePKCE: true,
+        // Does not close /mcp/register, the endpoint MCP clients actually
+        // hit (its registration_endpoint metadata points there): that route
+        // never checks this flag and is always open. It only gates
+        // oidc-provider's own /oauth2/register, which nothing here uses.
+        allowDynamicClientRegistration: true,
+      },
+    }),
+    // nextCookies must be the last plugin: it lets server actions set
+    // auth cookies via next/headers.
+    nextCookies(),
+  ],
 });

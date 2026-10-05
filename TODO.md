@@ -348,11 +348,53 @@ ordered by `createdAt`, top 50, no pagination. Three known limits:
   contract: a card only reads fields the tool already returns, and the model
   can then keep its text short and point at the card.
 - **MCP tool calls are not rate limited.** The MCP server (see its spec)
-  ships without a cap: the client's own model does the reasoning, so a call
-  costs us one bounded DB read, not model tokens. A looping agent can still
-  hammer the database under one user's token. When that matters, the cheap
-  version reuses what Cece already has — `ai_generations` with
-  `feature = 'mcp'` and `recordGenerationWithinLimit`, e.g. a few hundred
-  calls per user per 24h, with an over-limit call answered as an MCP tool
-  error rather than an HTTP failure. A per-minute burst limit is the same
-  helper with a one-minute `since`, at the cost of a row per call.
+  ships without a per-tool-call cap: the client's own model does the
+  reasoning, so a call costs us one bounded DB read, not model tokens. A
+  looping agent can still hammer the database under one user's token. This is
+  on top of, not instead of, Better Auth's own default limiter — on in
+  production, 100 requests per 10 seconds per IP per path — which already
+  covers `/mcp/register` and `/mcp/token`; hosted clients (Claude's, ChatGPT's
+  connector infrastructure) share egress IPs, so every user of that client
+  shares one such bucket. `/mcp/register` has the same tool-call gap one step
+  earlier: it is unauthenticated — the route itself never checks for a
+  session, not a side effect of `allowDynamicClientRegistration` — and every
+  call writes an `oauth_application` row, so a rate limit on it, or a
+  periodic sweep of rows no user ever authorized, belongs next to the
+  tool-call cap. When that matters, the cheap version reuses what Cece
+  already has — `ai_generations` with `feature = 'mcp'` and
+  `recordGenerationWithinLimit`, e.g. a few hundred calls per user per 24h,
+  with an over-limit call answered as an MCP tool error rather than an HTTP
+  failure. A per-minute burst limit is the same helper with a one-minute
+  `since`, at the cost of a row per call.
+- **Connected MCP apps cannot be revoked from the app.** An access token lasts
+  1h and a refresh token lasts 7d, rotated on every use — but rotation only
+  stops a leaked token from being replayed in parallel with the legitimate
+  client, it does not bound the connection itself. A client that refreshes at
+  least once every 7 days keeps access indefinitely, and the only thing that
+  ends it today is a password reset, which revokes every OAuth token the user
+  holds. There is still no way for the user to revoke a client's *still-valid*
+  access themselves short of that. A "Connected apps" card on /settings would
+  list `oauth_consent` rows with each client's registered name and when it was
+  approved, and Revoke would delete that client's consent and access tokens
+  for the user. The `connect-your-ai` guide topic says this is not available
+  yet; change it in the same commit.
+
+- **Refresh token exchange is not atomic.** The refresh grant
+  (`better-auth/dist/plugins/mcp/index.mjs`) reads the presented token, then
+  inserts the new access/refresh token row, and only after that does our own
+  `rotateRefreshTokenOnUse` (`lib/server/auth.ts`) delete the old row. Two
+  refreshes presenting the same token at the same time both read it as valid
+  before either deletion runs, so both can mint a new token pair — there is
+  single-use-eventually, not atomic single-use, and no detection that it
+  happened. Consuming the old token and minting the new one as one atomic
+  step, with reuse of an already-rotated token treated as a signal to revoke
+  the whole chain, is the correct fix; nothing in Better Auth's public surface
+  offers that primitive today.
+
+- **A logged-in password change doesn't revoke OAuth tokens.**
+  `emailAndPassword.onPasswordReset` (`lib/server/auth.ts`) only fires on the
+  forgot-password flow. There is no logged-in `/change-password` yet (see UX
+  debt), but once one exists it needs the same
+  `deleteUserOAuthTokens(user.id)` call — otherwise a stolen refresh token
+  survives a password the account's real owner changed proactively, closing
+  the gap only for the one path that goes through a reset email.

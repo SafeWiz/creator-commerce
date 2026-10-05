@@ -6,7 +6,7 @@ import Link from "next/link"
 
 import { signIn } from "@/lib/client/auth"
 import { identifyUser } from "@/lib/client/posthog"
-import { authPathWithNext } from "@/lib/schemas/auth"
+import { authPathWithNext, OAUTH_AUTHORIZE_PATH } from "@/lib/schemas/auth"
 import { Button } from "@/components/ui/button"
 import { CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -16,7 +16,13 @@ import { Label } from "@/components/ui/label"
 // Deliberately not better-auth's own `callbackURL`: it navigates via
 // window.location.href, a full reload that would race the router.push below, and
 // on signUp.email it is discarded entirely unless email verification is on.
-export function LoginForm({ next }: { next: string }) {
+export function LoginForm({
+  next,
+  oauthQuery,
+}: {
+  next: string
+  oauthQuery: string | null
+}) {
   const router = useRouter()
   const [pending, setPending] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -45,6 +51,14 @@ export function LoginForm({ next }: { next: string }) {
     // two different people and every conversion rate reads as zero.
     if (data?.user.id) {
       identifyUser(data.user.id)
+    }
+
+    // An app connecting over MCP sent the user here to sign in. Back to its
+    // authorize request, now signed in, which goes on to the consent screen.
+    // A full navigation: it is an API route that answers with a redirect.
+    if (oauthQuery) {
+      window.location.assign(`${OAUTH_AUTHORIZE_PATH}?${oauthQuery}`)
+      return
     }
 
     router.push(next)
@@ -90,7 +104,7 @@ export function LoginForm({ next }: { next: string }) {
         <p className="mt-1.5 text-center text-sm text-muted-foreground">
           New here?{" "}
           <Link
-            href={authPathWithNext("/signup", next)}
+            href={oauthQuery ? `/signup?${oauthQuery}` : authPathWithNext("/signup", next)}
             className="text-primary hover:underline"
           >
             Create an account
