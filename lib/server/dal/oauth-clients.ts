@@ -89,7 +89,11 @@ export async function getPendingConsent(
     return null
   }
 
+  // JSON.parse("null") succeeds; no Better Auth flow writes it, but a bad row
+  // must still land on the "expired" card rather than a 500.
   if (
+    !value ||
+    typeof value !== 'object' ||
     value.userId !== userId ||
     typeof value.clientId !== 'string' ||
     typeof value.redirectURI !== 'string'

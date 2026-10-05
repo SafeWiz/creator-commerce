@@ -498,9 +498,9 @@ leaked refresh token from being replayed in parallel with the legitimate
 client, it does not bound the connection itself, so a client that refreshes at
 least once every 7 days keeps access indefinitely. The only thing that ends it
 today is a password reset, which revokes every OAuth token the user has
-issued (see `onPasswordReset` below) — there is no logged-in
-`/change-password` yet for that to also hook into, and no revocation UI
-either (TODO.md). An authorization code lasts 10m. PKCE is required
+issued (see `onPasswordReset` below). Better Auth's `/change-password`
+endpoint is live but has no UI here yet, and it does not revoke OAuth tokens;
+neither does anything else, as there is no revocation UI (TODO.md). An authorization code lasts 10m. PKCE is required
 (`requirePKCE: true`), and `S256` is the only method accepted:
 `allowPlainCodeChallengeMethod` defaults to `false` and is not overridden in
 `oidcConfig`, so `/mcp/authorize` itself rejects a `code_challenge_method=plain`
