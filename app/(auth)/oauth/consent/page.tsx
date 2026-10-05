@@ -2,7 +2,7 @@ import type { Metadata } from "next"
 import { redirect } from "next/navigation"
 import { z } from "zod"
 
-import { getOAuthClientName } from "@/lib/server/dal/oauth-clients"
+import { getOAuthClient } from "@/lib/server/dal/oauth-clients"
 import { getUser } from "@/lib/server/request/session"
 import {
   CardContent,
@@ -35,9 +35,13 @@ export default async function ConsentPage({
   const user = await getUser()
   if (!user) redirect("/login")
 
-  const name = params.success ? await getOAuthClientName(params.data.client_id) : null
+  // A client that never registered (or whose row is gone) keeps the
+  // "expired" card — nothing was approved, so nothing to show. A client that
+  // registered without a name, or with an empty string, is a different case:
+  // it exists, so it gets "An unnamed app" instead.
+  const client = params.success ? await getOAuthClient(params.data.client_id) : null
 
-  if (!params.success || !name) {
+  if (!params.success || !client) {
     return (
       <CardHeader>
         <CardTitle className="text-xl">This link has expired</CardTitle>
@@ -47,6 +51,8 @@ export default async function ConsentPage({
       </CardHeader>
     )
   }
+
+  const name = client.name && client.name.length > 0 ? client.name : "An unnamed app"
 
   return (
     <>
@@ -64,6 +70,19 @@ export default async function ConsentPage({
           The name is chosen by the app itself. Only allow apps you set up
           yourself, signed in as {user.email}.
         </p>
+        {client.redirectTargets.length > 0 && (
+          <p className="text-sm text-muted-foreground">
+            After you allow, you&rsquo;ll be sent to{" "}
+            {client.redirectTargets.map((target, index) => (
+              <span key={target}>
+                {index > 0 &&
+                  (index === client.redirectTargets.length - 1 ? " or " : ", ")}
+                <strong>{target}</strong>
+              </span>
+            ))}
+            .
+          </p>
+        )}
         <ConsentForm consentCode={params.data.consent_code} />
       </CardContent>
     </>
