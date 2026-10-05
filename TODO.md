@@ -366,13 +366,35 @@ ordered by `createdAt`, top 50, no pagination. Three known limits:
   with an over-limit call answered as an MCP tool error rather than an HTTP
   failure. A per-minute burst limit is the same helper with a one-minute
   `since`, at the cost of a row per call.
-- **Connected MCP apps cannot be revoked from the app.** An approved client's
-  tokens don't last forever on their own — an access token lasts 1h, a refresh
-  token 7d and is rotated on every use, and a password reset revokes every
-  OAuth token the user holds — but there is still no way for the user to
-  revoke a client's *still-valid* access themselves, short of resetting their
-  password. A "Connected apps" card on /settings would list `oauth_consent`
-  rows with each client's registered name and when it was approved, and
-  Revoke would delete that client's consent and access tokens for the user.
-  The `connect-your-ai` guide
-  topic says this is not available yet; change it in the same commit.
+- **Connected MCP apps cannot be revoked from the app.** An access token lasts
+  1h and a refresh token lasts 7d, rotated on every use — but rotation only
+  stops a leaked token from being replayed in parallel with the legitimate
+  client, it does not bound the connection itself. A client that refreshes at
+  least once every 7 days keeps access indefinitely, and the only thing that
+  ends it today is a password reset, which revokes every OAuth token the user
+  holds. There is still no way for the user to revoke a client's *still-valid*
+  access themselves short of that. A "Connected apps" card on /settings would
+  list `oauth_consent` rows with each client's registered name and when it was
+  approved, and Revoke would delete that client's consent and access tokens
+  for the user. The `connect-your-ai` guide topic says this is not available
+  yet; change it in the same commit.
+
+- **Refresh token exchange is not atomic.** The refresh grant
+  (`better-auth/dist/plugins/mcp/index.mjs`) reads the presented token, then
+  inserts the new access/refresh token row, and only after that does our own
+  `rotateRefreshTokenOnUse` (`lib/server/auth.ts`) delete the old row. Two
+  refreshes presenting the same token at the same time both read it as valid
+  before either deletion runs, so both can mint a new token pair — there is
+  single-use-eventually, not atomic single-use, and no detection that it
+  happened. Consuming the old token and minting the new one as one atomic
+  step, with reuse of an already-rotated token treated as a signal to revoke
+  the whole chain, is the correct fix; nothing in Better Auth's public surface
+  offers that primitive today.
+
+- **A logged-in password change doesn't revoke OAuth tokens.**
+  `emailAndPassword.onPasswordReset` (`lib/server/auth.ts`) only fires on the
+  forgot-password flow. There is no logged-in `/change-password` yet (see UX
+  debt), but once one exists it needs the same
+  `deleteUserOAuthTokens(user.id)` call — otherwise a stolen refresh token
+  survives a password the account's real owner changed proactively, closing
+  the gap only for the one path that goes through a reset email.

@@ -492,10 +492,15 @@ client registration, PKCE, tokens under `/api/auth/mcp/*`, discovery at
 `/.well-known/oauth-authorization-server` and
 `/.well-known/oauth-protected-resource`. Its tables are generated like every
 other auth table. Token lifetimes are Better Auth's own defaults, not
-overridden here: an access token lasts 1h; a refresh token lasts 7d, is
-rotated on every use (see the `hooks.after` below), and is revoked — along
-with every other OAuth token the user has issued — on a password reset (see
-`onPasswordReset` below); an authorization code lasts 10m. PKCE is required
+overridden here: an access token lasts 1h; a refresh token lasts 7d and is
+rotated on every use (see the `hooks.after` below) — rotation only stops a
+leaked refresh token from being replayed in parallel with the legitimate
+client, it does not bound the connection itself, so a client that refreshes at
+least once every 7 days keeps access indefinitely. The only thing that ends it
+today is a password reset, which revokes every OAuth token the user has
+issued (see `onPasswordReset` below) — there is no logged-in
+`/change-password` yet for that to also hook into, and no revocation UI
+either (TODO.md). An authorization code lasts 10m. PKCE is required
 (`requirePKCE: true`), and `S256` is the only method accepted:
 `allowPlainCodeChallengeMethod` defaults to `false` and is not overridden in
 `oidcConfig`, so `/mcp/authorize` itself rejects a `code_challenge_method=plain`
