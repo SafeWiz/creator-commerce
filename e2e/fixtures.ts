@@ -8,7 +8,6 @@ export { BASE_URL } from './base-url'
 // across workers and beforeAll runs once per worker, so a per-file scope would
 // be created several times and cleaned up while siblings still use it.
 export const test = base.extend<{ seed: SeedScope }>({
-    // eslint-disable-next-line no-empty-pattern -- Playwright requires the destructuring
     seed: async ({}, use) => {
         const scope = createSeedScope()
         // eslint-disable-next-line react-hooks/rules-of-hooks -- Playwright's fixture `use`, not a React hook
