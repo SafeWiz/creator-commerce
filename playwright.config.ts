@@ -4,12 +4,14 @@ import { defineConfig, devices } from '@playwright/test'
 import { BASE_URL } from './e2e/base-url'
 import { FAKE_STRIPE_URL } from './e2e/fake-stripe/url'
 
-// scripts/with-test-branch.ts sets TEST_BRANCH and points PG_CONNECTION_STRING
-// at a throwaway Neon branch. Without it the app and the seed fixture would talk
-// to staging, and the fixture deletes rows.
-if (!process.env.TEST_BRANCH) {
+// scripts/with-test-branch.ts sets both TEST_BRANCH and PG_CONNECTION_STRING
+// together, pointed at a throwaway Neon branch. Requiring both here (not just
+// TEST_BRANCH) catches a stale TEST_BRANCH left in the shell's environment
+// with no matching PG_CONNECTION_STRING, which would otherwise point the app
+// and the seed fixture at staging — and the fixture deletes rows.
+if (!process.env.TEST_BRANCH || !process.env.PG_CONNECTION_STRING) {
   throw new Error(
-    'TEST_BRANCH is not set. Run `npm run test:e2e`, which creates a throwaway Neon branch and points the app at it.',
+    'TEST_BRANCH and PG_CONNECTION_STRING are not both set. Run `npm run test:e2e`, which creates a throwaway Neon branch and points the app at it.',
   )
 }
 
@@ -46,7 +48,10 @@ export default defineConfig({
     // started by hand would talk to whatever database it started with. Process
     // env wins over .env files, so these override STRIPE_SECRET_KEY and APP_URL
     // there too: no real key is ever sent to the fake, and Better Auth trusts
-    // this origin.
+    // this origin. NEXT_DIST_DIR gives it its own build directory, separate
+    // from a hand-started `next dev`'s .next — Next 16 allows only one `next
+    // dev` per build directory, and the two would otherwise fight over the
+    // same lockfile even on different ports.
     {
       command: `npm run dev -- --port ${new URL(BASE_URL).port}`,
       url: BASE_URL,
@@ -57,6 +62,13 @@ export default defineConfig({
         PG_CONNECTION_STRING: process.env.PG_CONNECTION_STRING!,
         STRIPE_API_BASE: FAKE_STRIPE_URL,
         STRIPE_SECRET_KEY: 'sk_test_fake',
+        NEXT_DIST_DIR: '.next-e2e',
+        // No real mail or analytics from a test run: absent SMTP credentials
+        // fall back to nodemailer's jsonTransport (see CLAUDE.md "# Email"),
+        // and an absent PostHog key means the SDK never initialises.
+        SMTP_USER: '',
+        SMTP_PASS: '',
+        NEXT_PUBLIC_POSTHOG_KEY: '',
       },
     },
   ],

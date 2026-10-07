@@ -10,6 +10,8 @@ const eslintConfig = defineConfig([
     // Default ignores of eslint-config-next:
     ".next/**",
     "out/**",
+    // Playwright's test server build dir (NEXT_DIST_DIR=.next-e2e).
+    ".next-e2e/**",
     "build/**",
     "next-env.d.ts",
     // Design reference material, not app code: extracted UI kits that expect an

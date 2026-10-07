@@ -6,6 +6,10 @@ const nextConfig: NextConfig = {
   // into the server output breaks those. Loaded from node_modules at runtime
   // instead.
   serverExternalPackages: ['nodemailer'],
+  // Next 16 locks a build directory to one running `next dev`. Playwright's
+  // webServer sets NEXT_DIST_DIR=.next-e2e so its test server never fights a
+  // hand-started `next dev` (default .next) for the same lockfile.
+  distDir: process.env.NEXT_DIST_DIR ?? '.next',
   images: {
     // UploadThing serves files from https://<appId>.ufs.sh/f/<key>.
     remotePatterns: [{ protocol: "https", hostname: "**.ufs.sh" }],
