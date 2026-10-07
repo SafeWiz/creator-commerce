@@ -104,8 +104,7 @@ await scope.cleanup()
   1. select users with `email like '<tag>-%@example.com'`;
   2. delete `purchases` where they are buyer or seller (both FKs `restrict`);
   3. delete those users — cascades products, uploads, image uploads, sessions,
-     accounts, AI generation rows and OAuth rows;
-  4. delete `verification` rows whose identifier contains the tag.
+     accounts, AI generation rows and OAuth rows.
 
   A failing cleanup fails the test.
 
@@ -123,9 +122,9 @@ await scope.cleanup()
 
 - `login.spec.ts` — `seed.user()` replaces the API signup.
 - `signup.spec.ts` — keeps the form; email and handle built from `seed.tag`.
-- `purchase.spec.ts` — seller and buyer via `seed.user()`, the buyer logged in
-  through the UI for a real session cookie; `seed.product()` replaces the raw
-  `neon` insert.
+- `purchase.spec.ts` — seller and buyer via `seed.user()`, the buyer signed in
+  over `/api/auth/sign-in/email` through `page.request`, which shares the page's
+  cookies; `seed.product()` replaces the raw `neon` insert.
 - The `signUp()` helpers and the `Date.now()` ids go away.
 
 ## Verification

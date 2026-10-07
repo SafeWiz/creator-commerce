@@ -315,6 +315,40 @@ Migrations run from a laptop, never from the build:
 `vercel env pull` writes `.env.local`, which `next dev` loads ahead of `.env`
 — pull only when that override is wanted.
 
+# Testing
+
+`npm run test:unit` (Vitest) and `npm run test:e2e` (Playwright) both run
+through `scripts/with-test-branch.ts`: it creates a schema-only Neon branch of
+`NEON_PARENT_BRANCH`, runs `drizzle-kit migrate` against it, runs the suite with
+`PG_CONNECTION_STRING` pointed at the branch and `TEST_BRANCH` set to its name,
+and deletes the branch afterwards — on failure and on Ctrl-C too. Schema-only
+on purpose: tests see only rows they seed, and no staging row reaches a test
+run. A wrapper rather than a `globalSetup` because Playwright starts its
+`webServer` before `globalSetup` runs.
+
+It needs `NEON_PROJECT_ID` and `NEON_PARENT_BRANCH` (`.env.example`), and
+`neonctl` credentials: `NEON_API_KEY`, or locally `npx neonctl auth`.
+`KEEP_TEST_BRANCH=1` keeps the branch for inspection. Every branch carries a
+2-hour expiry, and `npm run test:branches:prune` deletes `test-*` branches older
+than three hours.
+
+`TEST_BRANCH` is the guard: `test/seed/` and `playwright.config.ts` both throw
+without it, so running `npx playwright test` or `npx vitest` on a seeding test
+directly can never seed or delete staging rows.
+
+Playwright's app server runs on port 3100 with `reuseExistingServer: false`, so
+a `next dev` started by hand on 3000 is never the one under test.
+
+Tests get data from `createSeedScope()` (`test/seed/scope.ts`): `user()` inserts
+a user plus a credential account (password `SEED_PASSWORD`), `product()` a
+published product with no file. Every email is `<tag>-…@example.com`, and
+`cleanup()` deletes by that pattern — purchases first, since both of their user
+foreign keys restrict, then the users, which cascades the rest. A user a test
+creates through the UI is cleaned up too if its email starts with `seed.tag`.
+In Playwright, import `test` from `e2e/fixtures.ts` and take `seed`: a scope per
+test, because `fullyParallel` spreads one file across workers. In Vitest,
+`useSeedScope()` (`test/seed/vitest.ts`) gives one scope per file.
+
 # AI
 
 "Generate with AI" on the product form streams a description of the product's
