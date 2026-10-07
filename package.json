@@ -15,7 +15,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test:unit": "tsx --env-file-if-exists=.env --env-file-if-exists=.env.local scripts/with-test-branch.ts vitest",
+    "test:unit": "tsx --env-file-if-exists=.env --env-file-if-exists=.env.local scripts/with-test-branch.ts vitest run",
     "test:e2e": "tsx --env-file-if-exists=.env --env-file-if-exists=.env.local scripts/with-test-branch.ts playwright test",
     "test:branches:prune": "tsx --env-file-if-exists=.env --env-file-if-exists=.env.local scripts/prune-test-branches.ts"
   },
