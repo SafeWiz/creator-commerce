@@ -70,6 +70,17 @@ describe('parseCreatedBranch', () => {
         // run + assertions
         expect(() => parseCreatedBranch(json)).toThrow('connection uri')
     })
+
+    it('throws when the branch has more than one connection uri', () => {
+        // setup
+        const json = JSON.stringify({
+            branch: { id: 'br-cool-1', name: 'test-x' },
+            connection_uris: [{ connection_uri: 'postgres://a' }, { connection_uri: 'postgres://b' }],
+        })
+
+        // run + assertions
+        expect(() => parseCreatedBranch(json)).toThrow('several roles or databases')
+    })
 })
 
 describe('isStaleTestBranch', () => {

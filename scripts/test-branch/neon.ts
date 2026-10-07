@@ -38,6 +38,11 @@ export function parseCreatedBranch(json: string): { id: string; name: string; co
     }
     const id = parsed.branch?.id
     if (!id) throw new Error(`no branch id in neonctl output: ${json.slice(0, 200)}`)
+    // One role and one database is the only case the uri is unambiguous; with
+    // more, the first may not own `public` and the schema reset would fail.
+    if ((parsed.connection_uris?.length ?? 0) > 1) {
+        throw new Error('the new branch has several roles or databases; expected exactly one')
+    }
     const connectionUri = parsed.connection_uris?.[0]?.connection_uri
     if (!connectionUri) throw new Error(`no connection uri in neonctl output: ${json.slice(0, 200)}`)
     return { id, name: parsed.branch?.name ?? id, connectionUri }
@@ -64,12 +69,16 @@ export function neonctl(args: string[]): Promise<string> {
         })
         let stdout = ''
         let stderr = ''
+        child.stdout.setEncoding('utf8')
+        child.stderr.setEncoding('utf8')
         child.stdout.on('data', (chunk) => { stdout += chunk })
         child.stderr.on('data', (chunk) => { stderr += chunk })
         child.on('error', reject)
-        child.on('exit', (code) => {
+        // 'close', not 'exit': stdout can still be draining when 'exit' fires,
+        // and a truncated `branches create` reply would lose the branch id.
+        child.on('close', (code, signal) => {
             if (code === 0) resolve(stdout.trim())
-            else reject(new Error(stderr.trim() || `neonctl exited with code ${code}`))
+            else reject(new Error(stderr.trim() || `neonctl exited with ${signal ?? `code ${code}`}`))
         })
     })
 }
