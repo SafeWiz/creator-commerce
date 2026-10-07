@@ -1,8 +1,9 @@
-import { test, expect } from '@playwright/test'
+import { test, expect } from './fixtures'
 
-test('signing up lands on the dashboard with an unverified email', async ({ page }) => {
-    // setup: unique per run, since the email and the handle are both unique columns
-    const id = `e2e-${Date.now().toString(36)}`
+test('signing up lands on the dashboard with an unverified email', async ({ page, seed }) => {
+    // setup: named from the scope's tag, so the fixture's cleanup removes the
+    // account this test creates through the form
+    const id = `${seed.tag}-signup`
 
     // run
     await page.goto('/signup')

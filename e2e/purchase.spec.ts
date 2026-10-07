@@ -1,46 +1,28 @@
-import { neon } from '@neondatabase/serverless'
-import { test, expect, type APIRequestContext } from '@playwright/test'
-
 import { FAKE_STRIPE_URL } from './fake-stripe/url'
-
-const sql = neon(process.env.PG_CONNECTION_STRING!)
-
-async function signUp(request: APIRequestContext, name: string) {
-    const id = `e2e-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`
-    const response = await request.post('/api/auth/sign-up/email', {
-        headers: { Origin: 'http://localhost:3000' },
-        data: { name, email: `${id}@example.com`, password: 'correct-horse-battery', handle: id },
-    })
-    expect(response).toBeOK()
-    const { user } = await response.json()
-    return { id: user.id as string, handle: id }
-}
+import { BASE_URL, test, expect } from './fixtures'
 
 test('buying a product through a mocked Stripe checkout lands it in purchases', async ({
     page,
     request,
+    seed,
 }) => {
     // setup: a seller with one published product, and a signed-in buyer.
     //
-    // The seller signs up through `request`, which has its own cookie jar; the
-    // buyer through `page.request`, which shares the page's, so `page` starts
-    // signed in as the buyer.
-    //
-    // The product is inserted straight into the database. Creating one through
-    // the app needs a file uploaded to UploadThing — a second external service
-    // this test is not about — and `file_key` is nullable for exactly that kind
-    // of row. Checkout only reads the name and the price.
-    const seller = await signUp(request, 'E2E Seller')
-    await signUp(page.request, 'E2E Buyer')
+    // The buyer signs in through `page.request`, which shares the page's cookie
+    // jar, so `page` starts signed in. The login form itself is login.spec.ts's
+    // concern.
+    const seller = await seed.user({ name: 'E2E Seller' })
+    const buyer = await seed.user({ name: 'E2E Buyer' })
+    const product = await seed.product(seller, { name: `E2E Product ${seed.tag}`, priceInCents: 1250 })
 
-    const productName = `E2E Product ${seller.handle}`
-    const [product] = await sql`
-        insert into products (owner_id, name, slug, price_in_cents, status)
-        values (${seller.id}, ${productName}, 'e2e-product', 1250, 'published')
-        returning id`
+    const signIn = await page.request.post('/api/auth/sign-in/email', {
+        headers: { Origin: BASE_URL },
+        data: { email: buyer.email, password: buyer.password },
+    })
+    expect(signIn).toBeOK()
 
     // run: product page → cart → checkout
-    await page.goto(`/@${seller.handle}/${product.id}/e2e-product`)
+    await page.goto(product.url)
     await page.getByRole('button', { name: /^Add to cart/ }).click()
     await expect(page.getByRole('button', { name: 'In cart' })).toBeVisible()
 
@@ -48,12 +30,11 @@ test('buying a product through a mocked Stripe checkout lands it in purchases', 
     await page.getByRole('button', { name: /^Checkout/ }).click()
 
     // The redirect target is the proof the mock is wired in. Landing anywhere
-    // else means the app called the real Stripe — almost always a `next dev`
-    // started by hand, which playwright.config.ts reuses without its env.
-    await page.waitForURL((url) => url.origin !== 'http://localhost:3000')
+    // else means the app called the real Stripe.
+    await page.waitForURL((url) => url.origin !== BASE_URL)
     expect(
         page.url(),
-        `checkout went to ${new URL(page.url()).origin}, not the fake Stripe — stop your own \`npm run dev\` and let Playwright start it (see playwright.config.ts)`,
+        `checkout went to ${new URL(page.url()).origin}, not the fake Stripe — is STRIPE_API_BASE reaching the app server? (see playwright.config.ts)`,
     ).toMatch(new RegExp(`^${FAKE_STRIPE_URL}/pay/`))
 
     // What the app asked Stripe to charge — the part only the mock can see.
@@ -64,7 +45,7 @@ test('buying a product through a mocked Stripe checkout lands it in purchases', 
         line_items: [
             {
                 quantity: '1',
-                price_data: { unit_amount: '1250', product_data: { name: productName } },
+                price_data: { unit_amount: '1250', product_data: { name: product.name } },
             },
         ],
     })
@@ -76,7 +57,7 @@ test('buying a product through a mocked Stripe checkout lands it in purchases', 
     // assertions: back through /checkout/return, which retrieved the session
     // from the fake, saw it paid and fulfilled the order.
     await expect(page).toHaveURL('/purchases')
-    await expect(page.getByRole('link', { name: productName })).toBeVisible()
+    await expect(page.getByRole('link', { name: product.name })).toBeVisible()
 
     // ...and emptied the cart, which only happens once payment is confirmed.
     await page.goto('/cart')
