@@ -12,7 +12,7 @@ export default defineConfig({
         test: {
           name: 'server',
           environment: 'node',
-          include: ['lib/**/*.test.ts'],
+          include: ['lib/**/*.test.ts', 'scripts/**/*.test.ts', 'test/**/*.test.ts'],
           exclude: ['lib/client/**'],
         },
       },
