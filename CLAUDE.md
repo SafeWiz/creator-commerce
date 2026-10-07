@@ -374,6 +374,17 @@ that same `<tag>-…@example.com` pattern. In Playwright, import `test` from
 spreads one file across workers. In Vitest, `useSeedScope()`
 (`test/seed/vitest.ts`) gives one scope per file.
 
+Isolation is by data, not by database: every test in a run shares one branch
+and one app server, in parallel. The tags keep tests from colliding on rows,
+and anything scoped to a user (dashboard, purchases, cart) sees only that
+test's data. What isn't scoped — `/explore`, marketplace search, any newest-first
+or total — shows every parallel test's rows. So **assert on your own tagged
+data, never on counts or ordering across users**: "a link named
+`E2E Product <tag>` is visible", not "explore shows one product" or "my product
+is first". A test that truly needs a global view to itself needs its own
+serial Playwright project run after the others, or its own branch — neither
+exists yet.
+
 # AI
 
 "Generate with AI" on the product form streams a description of the product's
