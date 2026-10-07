@@ -335,7 +335,9 @@ rather than a `globalSetup` because Playwright starts its `webServer` before
 
 It needs `NEON_PROJECT_ID` and `NEON_PARENT_BRANCH` (`.env.example`), and
 `neonctl` credentials: `NEON_API_KEY`, or locally `npx neonctl auth`.
-`KEEP_TEST_BRANCH=1` keeps the branch for inspection. Every branch carries a
+`KEEP_TEST_BRANCH=1` keeps the branch for inspection, and a failed Playwright
+test then skips its seed cleanup and logs its tag, so its rows are still
+there. Every branch carries a
 2-hour expiry, and `npm run test:branches:prune` deletes `test-*` branches
 older than three hours. These are root branches of `NEON_PARENT_BRANCH`, not
 children of a `test` branch, and Neon caps how many a project may hold at once
