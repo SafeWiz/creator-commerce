@@ -315,6 +315,76 @@ Migrations run from a laptop, never from the build:
 `vercel env pull` writes `.env.local`, which `next dev` loads ahead of `.env`
 — pull only when that override is wanted.
 
+# Testing
+
+`npm run test:unit` (Vitest, `vitest run` — never watch mode, which would hold
+a branch open past its 2-hour expiry) and `npm run test:e2e` (Playwright) both
+run through `scripts/with-test-branch.ts`: it creates a schema-only Neon
+branch of `NEON_PARENT_BRANCH`, resets it to an empty `public` schema and
+replays the whole migration chain against it from zero, runs the suite with
+`PG_CONNECTION_STRING` pointed at the branch and `TEST_BRANCH` set to its
+name, and deletes the branch afterwards — on failure and on Ctrl-C too. The
+reset is necessary, not cosmetic: a schema-only branch copies no rows, so
+`drizzle.__drizzle_migrations` is empty, and `drizzle-kit migrate` would
+otherwise try to replay migration `0000` against objects the branch's schema
+copy already has. Replaying the full chain on every run also doubles as a
+check that it still applies cleanly end to end. Schema-only on purpose: tests
+see only rows they seed, and no staging row reaches a test run. A wrapper
+rather than a `globalSetup` because Playwright starts its `webServer` before
+`globalSetup` runs.
+
+It needs `NEON_PROJECT_ID` and `NEON_PARENT_BRANCH` (`.env.example`), and
+`neonctl` credentials: `NEON_API_KEY`, or locally `npx neonctl auth`.
+`KEEP_TEST_BRANCH=1` keeps the branch for inspection, and a failed Playwright
+test then skips its seed cleanup and logs its tag, so its rows are still
+there. Every branch carries a
+2-hour expiry, and `npm run test:branches:prune` deletes `test-*` branches
+older than three hours. These are root branches of `NEON_PARENT_BRANCH`, not
+children of a `test` branch, and Neon caps how many a project may hold at once
+(3 on Free, 5 on Launch, 25 on Scale — production's own branch counts against
+the same cap): concurrent runs, or a `KEEP_TEST_BRANCH` branch nobody deleted,
+can hit that cap and make the next `branches create` fail; prune clears
+whatever is stale.
+
+`TEST_BRANCH` is the guard: `test/seed/` and `playwright.config.ts` both throw
+without it — `playwright.config.ts` also requires `PG_CONNECTION_STRING` to
+already be set, in the same error, since the wrapper always sets both
+together — so running `npx playwright test` or `npx vitest` on a seeding test
+directly can never seed or delete staging rows.
+
+Playwright's app server runs on port 3100 with its own build directory
+(`NEXT_DIST_DIR=.next-e2e`, read by `next.config.ts`'s `distDir`) and
+`reuseExistingServer: false`. Next 16 allows only one `next dev` per build
+directory, so a `next dev` started by hand on port 3000 — using the default
+`.next` — can keep running alongside a test run: different port, different
+build directory, different database. That server's `env` also blanks
+`SMTP_USER`, `SMTP_PASS` and `NEXT_PUBLIC_POSTHOG_KEY`, so a test run never
+sends real mail (absent SMTP credentials fall back to nodemailer's
+`jsonTransport`, see "# Email" above) or real analytics events (an absent
+PostHog key means the SDK never initialises, see "# Analytics" above).
+
+Tests get data from `createSeedScope()` (`test/seed/scope.ts`): `user()` inserts
+a user plus a credential account (password `SEED_PASSWORD`), `product()` a
+published product with no file. Every email matches `<tag>-…@example.com`,
+and `cleanup()` deletes by that pattern — purchases first, since both of their
+user foreign keys restrict, then the users, which cascades the rest. A user a
+test creates through the UI is cleaned up too as long as its email follows
+that same `<tag>-…@example.com` pattern. In Playwright, import `test` from
+`e2e/fixtures.ts` and take `seed`: a scope per test, because `fullyParallel`
+spreads one file across workers. In Vitest, `useSeedScope()`
+(`test/seed/vitest.ts`) gives one scope per file.
+
+Isolation is by data, not by database: every test in a run shares one branch
+and one app server, in parallel. The tags keep tests from colliding on rows,
+and anything scoped to a user (dashboard, purchases, cart) sees only that
+test's data. What isn't scoped — `/explore`, marketplace search, any newest-first
+or total — shows every parallel test's rows. So **assert on your own tagged
+data, never on counts or ordering across users**: "a link named
+`E2E Product <tag>` is visible", not "explore shows one product" or "my product
+is first". A test that truly needs a global view to itself needs its own
+serial Playwright project run after the others, or its own branch — neither
+exists yet.
+
 # AI
 
 "Generate with AI" on the product form streams a description of the product's

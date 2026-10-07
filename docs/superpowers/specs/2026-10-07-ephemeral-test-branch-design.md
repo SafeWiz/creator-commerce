@@ -37,12 +37,20 @@ worker, so creating the branch there needs fragile env guards); one long-lived
    fallback to the staging connection string.
 2. **Create.** `neon branches create --project-id … --parent $NEON_PARENT_BRANCH
    --name test-<user>-<yyyymmdd-hhmmss>-<rand> --schema-only --expires-at <now+2h>
-   --output json`, then `neon connection-string <branch> --pooled`. The `test-`
-   prefix makes leftovers findable; the expiry is the backstop for a crashed run.
-   If `--schema-only` is refused for this parent, the script fails — it never
-   falls back to a full copy.
-3. **Migrate.** `drizzle-kit migrate` against the branch url. A no-op when
-   staging is current; applies an unmerged migration otherwise.
+   --output json`. The branch's connection url comes from that same output's
+   `connection_uris[0].connection_uri` — no separate `neon connection-string`
+   call, which throws when the project has more than one role or database.
+   The `test-` prefix makes leftovers findable; the expiry is the backstop for
+   a crashed run. If `--schema-only` is refused for this parent, the script
+   fails — it never falls back to a full copy.
+3. **Reset and migrate.** A schema-only branch copies no rows, so
+   `drizzle.__drizzle_migrations` is empty and `drizzle-kit migrate` would
+   otherwise try to replay migration `0000` against objects the branch's
+   schema copy already has. Before migrating, the script drops the `drizzle`
+   and `public` schemas and recreates `public` empty, through
+   `@neondatabase/serverless`'s `neon(url)`, then runs `drizzle-kit migrate`
+   against it from zero — which doubles as a check that the whole migration
+   chain still applies cleanly end to end.
 4. **Run.** Spawns `<cmd>` with inherited stdio and env
    `PG_CONNECTION_STRING=<branch url>`, `TEST_BRANCH=<branch name>`. Exits with
    the command's exit code.
@@ -59,18 +67,21 @@ hours, for anything that slipped past the expiry.
 Scripts:
 
 ```json
-"test:unit": "tsx scripts/with-test-branch.ts vitest",
+"test:unit": "tsx scripts/with-test-branch.ts vitest run",
 "test:e2e": "tsx scripts/with-test-branch.ts playwright test",
 "test:branches:prune": "tsx scripts/prune-test-branches.ts"
 ```
 
 ### Playwright server
 
-The test server moves to **port 3100**, with `APP_URL=http://localhost:3100` in
-its `env` and `reuseExistingServer: false` when `TEST_BRANCH` is set. A
-hand-started `next dev` on 3000 — pointed at staging — can then never be reused
-by a test run. `playwright.config.ts` throws when `TEST_BRANCH` is unset:
-"run through `npm run test:e2e`".
+The test server moves to **port 3100**, with `APP_URL=http://localhost:3100`
+and `NEXT_DIST_DIR=.next-e2e` in its `env`, and `reuseExistingServer: false`
+when `TEST_BRANCH` is set. The separate build directory is what lets a
+hand-started `next dev` on port 3000 (the default `.next`) keep running
+alongside: Next 16 allows only one `next dev` per build directory, so without
+it the two would fight over the same lockfile even on different ports.
+`playwright.config.ts` throws when `TEST_BRANCH` or `PG_CONNECTION_STRING` is
+unset: "run through `npm run test:e2e`".
 
 ## 2. Seed module — `test/seed/`
 
@@ -104,8 +115,7 @@ await scope.cleanup()
   1. select users with `email like '<tag>-%@example.com'`;
   2. delete `purchases` where they are buyer or seller (both FKs `restrict`);
   3. delete those users — cascades products, uploads, image uploads, sessions,
-     accounts, AI generation rows and OAuth rows;
-  4. delete `verification` rows whose identifier contains the tag.
+     accounts, AI generation rows and OAuth rows.
 
   A failing cleanup fails the test.
 
@@ -116,16 +126,17 @@ await scope.cleanup()
   not. Per test rather than per file, because under `fullyParallel` one file's
   tests run across workers and `beforeAll` runs once per worker. Specs import
   `test`/`expect` from `./fixtures`.
-- **Vitest** — `useSeedScope()` registers `beforeAll`/`afterAll` for the file
-  and returns the scope. A Vitest file runs in one worker, so per file is safe.
+- **Vitest** — `useSeedScope()` creates the scope synchronously and registers
+  only `afterAll` for the file, returning the scope. A Vitest file runs in one
+  worker, so per file is safe.
 
 ## 3. Spec migration
 
 - `login.spec.ts` — `seed.user()` replaces the API signup.
 - `signup.spec.ts` — keeps the form; email and handle built from `seed.tag`.
-- `purchase.spec.ts` — seller and buyer via `seed.user()`, the buyer logged in
-  through the UI for a real session cookie; `seed.product()` replaces the raw
-  `neon` insert.
+- `purchase.spec.ts` — seller and buyer via `seed.user()`, the buyer signed in
+  over `/api/auth/sign-in/email` through `page.request`, which shares the page's
+  cookies; `seed.product()` replaces the raw `neon` insert.
 - The `signUp()` helpers and the `Date.now()` ids go away.
 
 ## Verification

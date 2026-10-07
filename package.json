@@ -15,8 +15,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test:unit": "vitest",
-    "test:e2e": "playwright test"
+    "test:unit": "tsx --env-file-if-exists=.env --env-file-if-exists=.env.local scripts/with-test-branch.ts vitest run",
+    "test:e2e": "tsx --env-file-if-exists=.env --env-file-if-exists=.env.local scripts/with-test-branch.ts playwright test",
+    "test:branches:prune": "tsx --env-file-if-exists=.env --env-file-if-exists=.env.local scripts/prune-test-branches.ts"
   },
   "dependencies": {
     "@ai-sdk/react": "^4.0.121",
@@ -64,6 +65,7 @@
     "drizzle-kit": "^0.31.10",
     "eslint": "^9",
     "eslint-config-next": "16.2.10",
+    "neonctl": "^8.0.11",
     "tailwindcss": "^4",
     "tsx": "^4.23.13",
     "typescript": "^5",
