@@ -18,4 +18,26 @@ import Stripe from 'stripe'
 export const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: '2026-07-29.dahlia',
   maxNetworkRetries: 2,
+  ...apiBaseOverride(),
 })
+
+/**
+ * Points the SDK somewhere other than api.stripe.com — the e2e suite's fake
+ * (e2e/fake-stripe/server.ts), which playwright.config.ts starts and hands to
+ * the dev server as STRIPE_API_BASE. Ignored in a production build, so a stray
+ * variable can never send real payments to the wrong host.
+ */
+function apiBaseOverride(): Pick<
+  Stripe.StripeConfig,
+  'host' | 'port' | 'protocol'
+> {
+  const base = process.env.STRIPE_API_BASE
+  if (!base || process.env.NODE_ENV === 'production') return {}
+
+  const url = new URL(base)
+  return {
+    host: url.hostname,
+    port: url.port,
+    protocol: url.protocol === 'http:' ? 'http' : 'https',
+  }
+}
