@@ -42,21 +42,33 @@ describe('readNeonConfig', () => {
 })
 
 describe('parseCreatedBranch', () => {
-    it('reads the branch out of `branches create --output json`', () => {
+    it('reads the branch and connection uri out of `branches create --output json`', () => {
         // setup
         const json = JSON.stringify({
             branch: { id: 'br-cool-1', name: 'test-x' },
             endpoints: [],
-            connection_uris: [],
+            connection_uris: [{ connection_uri: 'postgres://branch', connection_parameters: {} }],
         })
 
         // run + assertions
-        expect(parseCreatedBranch(json)).toEqual({ id: 'br-cool-1', name: 'test-x' })
+        expect(parseCreatedBranch(json)).toEqual({
+            id: 'br-cool-1',
+            name: 'test-x',
+            connectionUri: 'postgres://branch',
+        })
     })
 
     it('throws on output without a branch id', () => {
         // run + assertions
         expect(() => parseCreatedBranch('{}')).toThrow('branch id')
+    })
+
+    it('throws on output without a connection uri', () => {
+        // setup
+        const json = JSON.stringify({ branch: { id: 'br-cool-1', name: 'test-x' }, connection_uris: [] })
+
+        // run + assertions
+        expect(() => parseCreatedBranch(json)).toThrow('connection uri')
     })
 })
 

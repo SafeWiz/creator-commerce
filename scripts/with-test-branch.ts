@@ -1,9 +1,14 @@
 /**
  * Runs a command against a throwaway Neon branch.
  *
- * Creates a schema-only branch of NEON_PARENT_BRANCH, applies any migration
- * staging doesn't have yet, runs the command with PG_CONNECTION_STRING pointed
- * at the branch and TEST_BRANCH set to its name, then deletes the branch.
+ * Creates a schema-only branch of NEON_PARENT_BRANCH, resets it to an empty
+ * `public` schema, then replays the whole migration chain against it from
+ * zero — a schema-only branch copies no rows, so `drizzle.__drizzle_migrations`
+ * is empty and `drizzle-kit migrate` would otherwise try to replay `0000`
+ * against objects the branch already has. Replaying the full chain every run
+ * also doubles as a check that it still applies cleanly end to end. Then runs
+ * the command with PG_CONNECTION_STRING pointed at the branch and TEST_BRANCH
+ * set to its name, and deletes the branch.
  *
  * Schema-only on purpose: the tests see only the rows they seed, and no staging
  * row — real people's emails among them — ends up in a test run. If Neon
@@ -25,9 +30,23 @@ import { spawn } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
 import { userInfo } from 'node:os'
 
+import { neon } from '@neondatabase/serverless'
+
 import { neonctl, parseCreatedBranch, readNeonConfig, testBranchName } from './test-branch/neon'
 
 const EXPIRY_MS = 2 * 60 * 60 * 1000
+
+// Drops both schemas drizzle-kit's migration journal and the app's tables
+// live in, then recreates `public` empty, so `drizzle-kit migrate` always
+// replays the whole chain from zero regardless of what the branch's schema
+// copy carried over. One statement per call — neon(url) doesn't support
+// multi-statement queries.
+async function resetSchema(url: string): Promise<void> {
+    const sql = neon(url)
+    await sql.query('DROP SCHEMA IF EXISTS drizzle CASCADE')
+    await sql.query('DROP SCHEMA IF EXISTS public CASCADE')
+    await sql.query('CREATE SCHEMA public')
+}
 
 async function step<T>(label: string, fn: () => Promise<T>): Promise<T> {
     try {
@@ -40,8 +59,8 @@ async function step<T>(label: string, fn: () => Promise<T>): Promise<T> {
 // The child currently running under runCommand, if any — read by main()'s
 // SIGTERM handler so it can forward the signal to whichever step (migrate or
 // the test command) is in flight. Steps with no child (creating the branch,
-// reading the connection string, deleting it) leave this null; a signal
-// arriving then has nothing to forward to and is only recorded on `interrupted`.
+// resetting its schema, deleting it) leave this null; a signal arriving then
+// has nothing to forward to and is only recorded on `interrupted`.
 let currentChild: ReturnType<typeof spawn> | null = null
 
 function runCommand(command: string, args: string[], env: NodeJS.ProcessEnv): Promise<number> {
@@ -64,8 +83,8 @@ async function main() {
     if (!command) throw new Error('usage: tsx scripts/with-test-branch.ts <command> [args...]')
 
     // Installed for the whole of main(), not just while a child is running, so
-    // a signal arriving between steps (while creating the branch, reading the
-    // connection string, or after migrate) is caught too instead of killing
+    // a signal arriving between steps (while creating the branch, resetting
+    // its schema, or after migrate) is caught too instead of killing
     // the process before the branch is deleted. SIGINT: a terminal Ctrl-C
     // reaches the child on its own, so this only records the signal. SIGTERM
     // (CI cancelling) only reaches this process, so it is forwarded to
@@ -111,10 +130,9 @@ async function main() {
         async function runSteps(): Promise<number> {
             if (interrupted !== null) return interrupted
 
-            const url = await step('reading connection string', () =>
-                neonctl(['connection-string', branch.id, ...project]),
-            )
-            const env = { ...process.env, PG_CONNECTION_STRING: url, TEST_BRANCH: branch.name }
+            const env = { ...process.env, PG_CONNECTION_STRING: branch.connectionUri, TEST_BRANCH: branch.name }
+
+            await step('resetting schema', () => resetSchema(branch.connectionUri))
 
             if (interrupted !== null) return interrupted
 
