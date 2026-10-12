@@ -2,7 +2,7 @@
 
 import { X } from "lucide-react"
 
-import { Image } from "@/components/image"
+import { Image, THUMBNAIL_QUALITY } from "@/components/image"
 import { UploadDropzone } from "@/lib/client/uploadthing"
 import { MAX_PRODUCT_IMAGES } from "@/lib/schemas/product"
 import { Button } from "@/components/ui/button"
@@ -56,6 +56,7 @@ export function ProductImages({
                   alt=""
                   fill
                   sizes="96px"
+                  quality={THUMBNAIL_QUALITY}
                   className="object-cover"
                 />
                 {/* Revealed on hover, but always reachable by keyboard. */}

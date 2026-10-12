@@ -1,6 +1,28 @@
 import { withSentryConfig } from "@sentry/nextjs/config";
 import type { NextConfig } from "next";
 
+/**
+ * The UploadThing app id, read out of UPLOADTHING_TOKEN — a base64 JSON object
+ * `{ apiKey, appId, regions }` (uploadthing's `UploadThingToken` schema). Read
+ * here rather than from a separate variable so the image allowlist can never
+ * name a different app than the one uploads go to.
+ *
+ * Absent or malformed means no uploads can happen either, so no remote image
+ * is allowed — a fresh clone without a token has none to show.
+ */
+function readUploadThingAppId(token: string | undefined): string | null {
+  if (!token) return null
+  try {
+    const { appId } = JSON.parse(Buffer.from(token, 'base64').toString('utf8'))
+    // Lands in a hostname, so only what an app id is made of.
+    return typeof appId === 'string' && /^[a-z0-9]+$/i.test(appId) ? appId : null
+  } catch {
+    return null
+  }
+}
+
+const uploadThingAppId = readUploadThingAppId(process.env.UPLOADTHING_TOKEN)
+
 const nextConfig: NextConfig = {
   // nodemailer is a CommonJS node library with dynamic requires; bundling it
   // into the server output breaks those. Loaded from node_modules at runtime
@@ -23,8 +45,36 @@ const nextConfig: NextConfig = {
     '**/opengraph-image*/**': ['./assets/fonts/**'],
   },
   images: {
-    // UploadThing serves files from https://<appId>.ufs.sh/f/<key>.
-    remotePatterns: [{ protocol: "https", hostname: "**.ufs.sh" }],
+    // UploadThing serves files from https://<appId>.ufs.sh/f/<key>
+    // (uploadthing/server's urlBase, default `subdomain` location). Pinned to
+    // this deployment's own app, not `**.ufs.sh`: every UploadThing customer
+    // shares that domain, and a wildcard would let anyone point the optimizer
+    // at their own app's files on our bill. `search: ''` refuses a query
+    // string, which ufsUrls never carry — otherwise each `?x=…` variant of one
+    // url is a separate optimization.
+    remotePatterns: uploadThingAppId
+      ? [{ protocol: 'https', hostname: `${uploadThingAppId}.ufs.sh`, pathname: '/f/**', search: '' }]
+      : [],
+    // The productImage route caps uploads at '4MB' (lib/server/uploadthing.ts),
+    // which UploadThing reads as 4 × 1024². Anything bigger did not come from
+    // an upload, so refuse it before buffering it. Default is 50 MB.
+    maximumResponseBody: 4 * 1024 * 1024,
+    // A ufsUrl answers directly. Redirects would be followed without
+    // re-checking remotePatterns, so none are followed at all.
+    maximumRedirects: 0,
+    // The widths a srcset may ask for. The widest box is the product gallery at
+    // 546 CSS px, so 1920 covers it at 3× DPR; the defaults' 2048 and 3840 only
+    // add optimizations no layout requests. imageSizes covers the 96 px
+    // thumbnails at 1–3× and the cards' 376 px box at 1×.
+    deviceSizes: [640, 750, 828, 1080, 1200, 1920],
+    imageSizes: [96, 192, 288, 384],
+    // The optimizer 400s any `q` not listed here, and the default loader snaps
+    // a `quality` prop to the nearest entry. 75 (Next's default) is everything
+    // a buyer judges a product by — cards and the gallery. 50 is for the 96 px
+    // thumbnails (cart, product form), where artifacts are too small to see.
+    // Those fetch widths 96–288 and the cards 384 up, so the two qualities
+    // barely share a (url, width) and add almost no cache entries.
+    qualities: [50, 75],
     formats: ['image/avif', 'image/webp'],
     minimumCacheTTL: 2678400
   },

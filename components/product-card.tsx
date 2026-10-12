@@ -44,6 +44,7 @@ export function ProductCover({
   className,
   iconClassName,
   sizes,
+  quality,
   preload,
 }: {
   images: string[]
@@ -51,6 +52,7 @@ export function ProductCover({
   className?: string
   iconClassName?: string
   sizes?: string
+  quality?: number
   preload?: boolean
 }) {
   const [cover] = images
@@ -69,6 +71,7 @@ export function ProductCover({
         alt={alt}
         fill
         sizes={sizes ?? PRODUCT_CARD_SIZES}
+        quality={quality}
         preload={preload}
         className="object-cover"
       />

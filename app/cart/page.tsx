@@ -8,6 +8,7 @@ import { getUser } from "@/lib/server/request/session"
 import { getCartProducts, type CartProduct } from "@/lib/server/dal/products"
 import { getPurchasedProductIds } from "@/lib/server/dal/purchases"
 import { TrackView } from "@/components/analytics/track-view"
+import { THUMBNAIL_QUALITY } from "@/components/image"
 import { ProductCover } from "@/components/product-card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -144,6 +145,7 @@ function CartLine({
         alt={product.name}
         className="w-24 shrink-0 overflow-hidden rounded-lg"
         sizes="96px"
+        quality={THUMBNAIL_QUALITY}
       />
       <div className="flex flex-1 flex-col gap-0.5">
         <Link
