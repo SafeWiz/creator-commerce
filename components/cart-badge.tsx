@@ -23,7 +23,7 @@ export async function CartBadge() {
       nativeButton={false}
       render={<Link href="/cart" />}
     >
-      <ShoppingCart /> Cart
+      <ShoppingCart /> <span className="max-sm:sr-only">Cart</span>
       {count > 0 && (
         <Badge variant="secondary" className="ml-0.5">
           {count}
