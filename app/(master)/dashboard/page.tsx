@@ -11,7 +11,7 @@ import {
 import { requireUser } from "@/lib/server/request/session"
 import { formatPrice } from "@/lib/currency"
 import { ConversionCard } from "@/components/conversion-card"
-import { KpiCard, KpiCardSkeleton, type KpiBadge } from "@/components/kpi-card"
+import { KpiCard, KpiCardSkeleton, deltaBadge } from "@/components/kpi-card"
 import { TopProductsCard } from "@/components/top-products-card"
 import { Button } from "@/components/ui/button"
 
@@ -40,29 +40,6 @@ const getDashboardWindow = cache(() => {
     previousSince: new Date(now - 2 * PERIOD_DAYS * DAY_MS),
   }
 })
-
-/**
- * A delta is a comparison, and a comparison needs both sides.
- *
- * With no prior window there is no percentage to compute: dividing by zero is
- * undefined, and both "+100%" and "+∞%" would be inventions sitting next to real
- * numbers. "New" is the true statement — this is the first window with sales.
- * When neither window has any, there is nothing to say at all.
- */
-function deltaBadge(current: number, previous: number): KpiBadge | null {
-  if (previous === 0) {
-    return current > 0 ? { label: "New", variant: "secondary" } : null
-  }
-
-  const change = ((current - previous) / previous) * 100
-  const up = change >= 0
-
-  return {
-    // toFixed already prints the minus sign; only the plus needs adding.
-    label: `${up ? "+" : ""}${change.toFixed(1)}%`,
-    variant: up ? "default" : "destructive",
-  }
-}
 
 export default async function DashboardPage() {
   const user = await requireUser()

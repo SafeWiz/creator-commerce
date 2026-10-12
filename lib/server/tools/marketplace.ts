@@ -26,6 +26,7 @@ export const searchMarketplace = defineTool({
     return {
       currency: APP_CURRENCY,
       results: rows.slice(0, RESULT_LIMIT).map((p) => ({
+        id: p.id,
         name: p.name,
         priceInCents: p.priceInCents,
         sellerHandle: p.sellerHandle,

@@ -213,6 +213,7 @@ export async function getSellerSales(sellerId: string): Promise<SellerSale[]> {
 // The seller may see their buyers' addresses on /sales; sending them on to a
 // model provider is a disclosure the seller never made.
 export type SellerRecentSale = {
+  productId: number
   productName: string
   priceInCents: number
   createdAt: Date
@@ -226,6 +227,7 @@ export async function getSellerRecentSales(
 ): Promise<SellerRecentSale[]> {
   return db
     .select({
+      productId: purchasesTable.productId,
       productName: purchasesTable.productName,
       priceInCents: purchasesTable.priceInCents,
       createdAt: purchasesTable.createdAt,

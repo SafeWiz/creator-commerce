@@ -79,6 +79,7 @@ export const listRecentSales = defineTool({
     return {
       currency: APP_CURRENCY,
       sales: sales.map((s) => ({
+        productId: s.productId,
         productName: s.productName,
         priceInCents: s.priceInCents,
         soldAt: s.createdAt.toISOString(),

@@ -20,8 +20,10 @@ test('a signed-out visitor can search explore and sees published products only',
     await expect(page.getByRole('heading', { name: 'Explore' })).toBeVisible()
     await expect(page.getByRole('link', { name: published.name })).toBeVisible()
     await expect(page.getByRole('link', { name: draft.name })).toHaveCount(0)
-    // the public header, not the dashboard's, and sign-in returns here
-    await expect(page.getByRole('link', { name: 'Sign in' })).toHaveAttribute('href', '/login?next=%2Fexplore')
+    // the public header, not the dashboard's, and sign-in returns here. Located
+    // as an anchor, not by role: Base UI's Button gives a non-native element
+    // role="button", so this link's accessible role is button.
+    await expect(page.locator('header a', { hasText: 'Sign in' })).toHaveAttribute('href', '/login?next=%2Fexplore')
 })
 
 test('a signed-out visitor can add a product to the cart from explore', async ({ page, seed }) => {

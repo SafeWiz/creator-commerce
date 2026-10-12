@@ -6,6 +6,9 @@ import { getToolName, isToolUIPart, type UIMessage } from "ai"
 import { Check, CircleSlash, Loader2, X } from "lucide-react"
 import { Streamdown } from "streamdown"
 
+import { ToolResultCard } from "@/components/cece/cards"
+import { isAppPath } from "@/components/cece/cards/shared"
+
 // Client-side copy of the tool names in lib/server/tools — the registry is
 // server-only. An unknown name falls back to the generic label.
 const TOOL_LABELS: Record<string, { running: string; done: string }> = {
@@ -30,13 +33,11 @@ const TOOL_FAILURE_LABEL = "Couldn't look that up"
 // would spin forever on the generic running label.
 const STOPPED_LABEL = "Stopped"
 
-// A path on this app. `//` and `/\` are excluded because browsers read both
-// as the start of another host. The regex alone would accept inputs like
-// `/\t/evil.com`; it is safe because streamdown's default `rehype-harden`
-// step normalizes relative hrefs (via `new URL(href, base)`) before
-// AnswerLink sees them — overriding streamdown's `rehypePlugins` would need
-// this rechecked.
-const APP_PATH = /^\/(?![\/\\])/
+// The app-path check lives in cards/shared.tsx, shared with the cards. The
+// regex alone would accept inputs like `/\t/evil.com`; it is safe here because
+// streamdown's default `rehype-harden` step normalizes relative hrefs (via
+// `new URL(href, base)`) before AnswerLink sees them — overriding streamdown's
+// `rehypePlugins` would need this rechecked.
 
 /**
  * Links in an answer. Only app paths become links: an answer can quote
@@ -45,7 +46,7 @@ const APP_PATH = /^\/(?![\/\\])/
  * next/link keeps the panel open while the page behind it navigates.
  */
 function AnswerLink({ href, children }: ComponentProps<"a">) {
-  if (typeof href === "string" && APP_PATH.test(href)) {
+  if (isAppPath(href)) {
     return (
       <Link href={href} className="font-medium text-primary underline underline-offset-2">
         {children}
@@ -96,7 +97,7 @@ export function CeceMessage({
           // Not streaming and not in a final state: Stop was pressed, or the
           // stream errored, mid-call. It will never resolve on its own.
           const stopped = !streaming && !failed && !done
-          return (
+          const chip = (
             <span
               key={i}
               className="inline-flex w-fit items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 text-xs text-muted-foreground"
@@ -112,6 +113,14 @@ export function CeceMessage({
               )}
               {failed ? TOOL_FAILURE_LABEL : done ? label.done : stopped ? STOPPED_LABEL : label.running}
             </span>
+          )
+          // A finished lookup shows its result as a card where the tool has
+          // one; the chip stays for running, failed and stopped calls, and for
+          // tools with nothing to show (the guide).
+          return done ? (
+            <ToolResultCard key={i} toolName={getToolName(part)} output={part.output} fallback={chip} />
+          ) : (
+            chip
           )
         }
         // Step markers, reasoning and anything else carry nothing to show.

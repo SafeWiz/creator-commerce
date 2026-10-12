@@ -559,8 +559,8 @@ neither spends the other's quota. A 429 leaves no row behind.
 
 Buyer emails never reach the model (`getSellerRecentSales` does not select
 them), and only relative app paths render as links in the panel: an answer can
-quote marketplace text other users wrote. The link check in
-`components/cece/cece-message.tsx` relies on streamdown's default
+quote marketplace text other users wrote. The link check (`isAppPath` in
+`components/cece/cards/shared.tsx`, used by `cece-message.tsx`) relies on streamdown's default
 `rehype-harden` step normalizing a relative href before the check sees it —
 overriding streamdown's `rehypePlugins` would need that check rechecked. A
 tool lookup that throws has `toAiSdkTools` (`lib/server/ai/cece/ai-sdk.ts`)
@@ -582,6 +582,20 @@ a non-final state by Stop, or by the stream erroring mid-call, renders as
 body — Cece's own error text, or the route's 401/429/400 message — is shown
 to the user as-is, including a raw `APICallError` body for anything else the
 route sends.
+
+A finished tool call renders as a card (`components/cece/cards/`), picked
+by tool name in `cards/index.tsx`; a tool with no card there (the guide)
+keeps the chip, and so does a running, failed or stopped call. The cards
+type their input with `import type` from the tool modules
+(`cards/types.ts`), but the data is the browser-held history, so every link
+goes through `isAppPath` and a card that throws falls back to the chip.
+Tool outputs carry product ids, never image urls — the model has no use for
+them and a url read from history is one the client chose. Covers come from
+`getProductCoversAction` (`lib/actions/cece.ts`) →
+`getVisibleProductCovers`, which answers only for products the viewer owns,
+that are published, or that they bought. The instructions tell the model not
+to repeat a card's items in its answer; MCP clients don't get those
+instructions and still read every item from the JSON.
 
 The panel sends `pathname` (from `usePathname()`) as a request body on each
 `sendMessage`/`regenerate` call, not through the transport: `useChat`'s

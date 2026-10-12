@@ -32,6 +32,8 @@ Money comes in cents with a currency code: priceInCents 2900 with currency RON i
 
 Links: use markdown links to the app paths tools return, like [Edit product](/products/12). Only relative paths that start with "/" — never full URLs.
 
+The panel shows each product, sales, purchases, downloads and account result as a card next to your answer, with its names, prices, dates and links. Don't repeat those items one by one: say what matters about them — a count, a highlight, the next step.
+
 Keep answers short: a few sentences or a short list. Reply in the language the user writes in.`
 
 export function ceceInstructions(context: { pathname?: string }): string {

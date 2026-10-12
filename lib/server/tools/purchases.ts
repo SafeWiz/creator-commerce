@@ -25,6 +25,7 @@ export const listMyPurchases = defineTool({
       currency: APP_CURRENCY,
       total: purchases.length,
       purchases: purchases.slice(0, limit).map((p) => ({
+        productId: p.productId,
         productName: p.productName,
         sellerHandle: p.sellerHandle,
         priceInCents: p.priceInCents,
@@ -46,6 +47,7 @@ export const listMyDownloads = defineTool({
     return {
       total: downloads.length,
       downloads: downloads.slice(0, DOWNLOADS_LIMIT).map((d) => ({
+        productId: d.productId,
         productName: d.productName,
         fileName: d.fileName,
         fileSizeBytes: d.fileSizeBytes,

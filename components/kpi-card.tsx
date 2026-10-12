@@ -13,6 +13,29 @@ export type KpiBadge = {
 }
 
 /**
+ * A delta is a comparison, and a comparison needs both sides.
+ *
+ * With no prior window there is no percentage to compute: dividing by zero is
+ * undefined, and both "+100%" and "+∞%" would be inventions sitting next to real
+ * numbers. "New" is the true statement — this is the first window with sales.
+ * When neither window has any, there is nothing to say at all.
+ */
+export function deltaBadge(current: number, previous: number): KpiBadge | null {
+  if (previous === 0) {
+    return current > 0 ? { label: "New", variant: "secondary" } : null
+  }
+
+  const change = ((current - previous) / previous) * 100
+  const up = change >= 0
+
+  return {
+    // toFixed already prints the minus sign; only the plus needs adding.
+    label: `${up ? "+" : ""}${change.toFixed(1)}%`,
+    variant: up ? "default" : "destructive",
+  }
+}
+
+/**
  * Extracted from the dashboard page when Conversion started arriving on its own
  * schedule. The other three KPIs come from Drizzle in the same render; this one
  * comes from PostHog behind a Suspense boundary, and both have to look

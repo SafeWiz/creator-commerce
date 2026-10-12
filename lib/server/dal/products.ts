@@ -1,6 +1,6 @@
 import 'server-only'
 
-import { and, asc, desc, eq, ilike, inArray, isNull, lt, ne, or, sql } from 'drizzle-orm'
+import { and, asc, desc, eq, exists, ilike, inArray, isNull, lt, ne, or, sql } from 'drizzle-orm'
 
 import {
   EXPLORE_RESULT_LIMIT,
@@ -17,6 +17,7 @@ import {
   type Product,
   type ProductStatus,
 } from '@/lib/server/db/schemas/product'
+import { purchasesTable } from '@/lib/server/db/schemas/purchase'
 import { slugify } from '@/lib/utils'
 
 export type CreateProductInput = {
@@ -834,4 +835,49 @@ export async function getSellerProductCounts(
     )
 
   return { published: row?.published ?? 0, drafts: row?.drafts ?? 0 }
+}
+
+/**
+ * The cover image of each product the viewer may see, keyed by id — what the
+ * Cece panel's cards fetch, since tool outputs carry ids and never image urls.
+ *
+ * Visible means not deleted and one of: the viewer owns it (drafts included),
+ * it is published, or the viewer bought it — a product unpublished after the
+ * sale is still the thing in their purchase history. `ne('pending')` for the
+ * purchase matches getBuyerPurchases. An id that matches none of these is
+ * simply absent from the map, the same answer as an id that never existed.
+ */
+export async function getVisibleProductCovers(
+  viewerId: string,
+  ids: number[],
+): Promise<Map<number, string | null>> {
+  if (ids.length === 0) return new Map()
+
+  const rows = await db
+    .select({ id: productsTable.id, images: productsTable.images })
+    .from(productsTable)
+    .where(
+      and(
+        inArray(productsTable.id, ids),
+        isNull(productsTable.deletedAt),
+        or(
+          eq(productsTable.ownerId, viewerId),
+          eq(productsTable.status, 'published'),
+          exists(
+            db
+              .select({ one: sql`1` })
+              .from(purchasesTable)
+              .where(
+                and(
+                  eq(purchasesTable.productId, productsTable.id),
+                  eq(purchasesTable.buyerId, viewerId),
+                  ne(purchasesTable.status, 'pending'),
+                ),
+              ),
+          ),
+        ),
+      ),
+    )
+
+  return new Map(rows.map((row) => [row.id, row.images[0] ?? null]))
 }
