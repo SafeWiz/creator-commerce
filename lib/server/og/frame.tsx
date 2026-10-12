@@ -1,5 +1,6 @@
 import 'server-only'
 
+import { Logo } from '@/components/logo'
 import { emailTheme } from '@/lib/email-theme.generated'
 import { SITE_NAME } from '@/lib/site'
 
@@ -27,7 +28,7 @@ export function OgFrame({ children }: { children: React.ReactNode }) {
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 14, fontFamily: 'Heading', fontSize: 30 }}>
-        <div style={{ width: 22, height: 22, borderRadius: 999, background: ogColors.primary }} />
+        <Logo size={40} colors={{ foreground: ogColors.foreground, primary: ogColors.primary }} />
         {SITE_NAME}
       </div>
       <div style={{ display: 'flex', flex: 1, marginTop: 40 }}>{children}</div>
