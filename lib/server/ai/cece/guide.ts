@@ -72,7 +72,7 @@ Payouts: connecting your own Stripe account and scheduled payouts are not availa
   },
   buying: {
     summary: 'Cart, checkout, purchases and downloads.',
-    content: `- Explore (/explore) searches published products from other creators; type at least 3 characters.
+    content: `- Explore (/explore) searches published products from other creators; type at least 3 characters. No account needed to browse it.
 - Add to cart from any product page, no account needed. The cart (/cart) holds one of each product, up to 20 products.
 - Checkout requires signing in; you come back to the cart with everything still in it. Payment is on Stripe's page.
 - After paying you land on /purchases, your order history.

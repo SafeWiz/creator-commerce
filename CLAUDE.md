@@ -235,11 +235,13 @@ a safety net for that case.
 
 # SEO
 
-Only the landing page, storefronts and product pages are meant to be indexed.
+Only the landing page, `/explore`, storefronts and product pages are meant to
+be indexed — `/explore` with a `q` is noindex, and every variant's canonical is
+the bare `/explore`.
 `app/robots.ts` lets crawlers in on production only (`isProductionDeployment`
 in `lib/server/app-url.ts`) and points them at `app/sitemap.ts`, which lists
-storefronts with at least one published product and every published product
-(`listSitemapEntries`). Private pages are kept out with `robots: { index:
+`/explore`, storefronts with at least one published product and every
+published product (`listSitemapEntries`). Private pages are kept out with `robots: { index:
 false }` in their layouts — `(master)`, `(auth)`, `cart`, `checkout` — not a
 robots.txt `Disallow`: a disallowed url can still be indexed from inbound
 links, and a crawler only sees noindex on a page it may fetch. A new private
