@@ -12,7 +12,7 @@ import {
 import { readCartMembership } from "@/lib/server/request/cart"
 import { searchPublishedProducts } from "@/lib/server/dal/products"
 import { requireUser } from "@/lib/server/request/session"
-import { ProductCard } from "@/components/product-card"
+import { ProductCard, ProductGrid } from "@/components/product-card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { ExploreSearchInput } from "./explore-search-input"
 
@@ -34,7 +34,7 @@ export default async function ExplorePage({
   const viewer = await requireUser()
 
   return (
-    <div className="mx-auto flex max-w-[1120px] flex-col gap-4 p-6">
+    <div className="mx-auto flex max-w-[1120px] flex-col gap-4 p-4 sm:p-6">
       <div>
         <h1 className="font-heading text-2xl font-medium tracking-[-0.02em]">
           Explore
@@ -100,7 +100,7 @@ async function ExploreResults({
 
   return (
     <>
-      <div aria-live="polite" className="grid grid-cols-3 gap-5">
+      <ProductGrid aria-live="polite">
         {products.map((product, index) => (
           <ProductCard
             key={product.id}
@@ -115,7 +115,7 @@ async function ExploreResults({
             preload={index === 0}
           />
         ))}
-      </div>
+      </ProductGrid>
       {/* Without pagination, a query matching 400 products would otherwise show
           50 and read as "that's everything". */}
       {products.length === EXPLORE_RESULT_LIMIT && (
@@ -162,7 +162,7 @@ function ExploreSortLinks({ q, sort }: { q: string; sort: ExploreSort }) {
 
 function ExploreGridSkeleton() {
   return (
-    <div className="grid grid-cols-3 gap-5">
+    <ProductGrid>
       {Array.from({ length: 6 }, (_, index) => (
         <div
           key={index}
@@ -176,6 +176,6 @@ function ExploreGridSkeleton() {
           </div>
         </div>
       ))}
-    </div>
+    </ProductGrid>
   )
 }

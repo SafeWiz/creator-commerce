@@ -17,25 +17,25 @@ export function StorefrontShell({
   return (
     <>
       <header className="sticky top-0 z-10 border-b bg-background">
-        <div className="mx-auto flex max-w-[1080px] items-center gap-3.5 px-6 py-3.5">
-          <Link href={storefrontPath(seller.handle)} className="flex items-center gap-3">
+        <div className="mx-auto flex max-w-[1080px] items-center gap-3.5 px-4 py-3.5 sm:px-6">
+          <Link href={storefrontPath(seller.handle)} className="flex min-w-0 items-center gap-3">
             {/* Initials only for now: nothing populates user.image yet, and an
                 arbitrary avatar host isn't in next.config's remotePatterns. */}
-            <span className="flex size-10 items-center justify-center rounded-full bg-chart-1 font-heading text-base font-bold">
+            <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-chart-1 font-heading text-base font-bold">
               {getInitials(seller.name)}
             </span>
-            <div className="flex flex-col">
-              <span className="font-heading text-base leading-tight font-medium tracking-[-0.01em]">
+            <div className="flex min-w-0 flex-col">
+              <span className="truncate font-heading text-base leading-tight font-medium tracking-[-0.01em]">
                 {seller.name}
               </span>
-              <span className="font-mono text-xs text-muted-foreground">
+              <span className="truncate font-mono text-xs text-muted-foreground">
                 @{seller.handle}
               </span>
             </div>
           </Link>
           <div className="flex-1" />
           <Button variant="outline" size="sm">
-            <Heart /> Wishlist
+            <Heart /> <span className="max-sm:sr-only">Wishlist</span>
           </Button>
           <CartBadge />
           <Button variant="ghost" size="sm" nativeButton={false} render={<Link href="/login" />}>

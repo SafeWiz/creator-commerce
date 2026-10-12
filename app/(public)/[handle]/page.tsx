@@ -6,7 +6,7 @@ import { readCartMembership } from "@/lib/server/request/cart"
 import { getStorefrontProducts } from "@/lib/server/dal/products"
 import { getUserByHandle } from "@/lib/server/dal/users"
 import { getUser } from "@/lib/server/request/session"
-import { ProductCard } from "@/components/product-card"
+import { ProductCard, ProductGrid } from "@/components/product-card"
 import { TrackView } from "@/components/analytics/track-view"
 import { requestedPath, storefrontPath, withSearchParams } from "@/lib/paths"
 import { SITE_OPEN_GRAPH } from "@/lib/site"
@@ -70,7 +70,7 @@ export default async function StorefrontPage({
   ).length
 
   return (
-    <div className="mx-auto max-w-[1080px] px-6 pt-8 pb-16">
+    <div className="mx-auto max-w-[1080px] px-4 pt-6 pb-16 sm:px-6 sm:pt-8">
       {/* Skipped for the owner. A seller refreshing their own storefront would
           otherwise inflate their own denominator, and the sellers who look at
           their page most would show the worst conversion. */}
@@ -81,7 +81,7 @@ export default async function StorefrontPage({
         />
       )}
       <div className="mb-6">
-        <h1 className="font-heading text-3xl font-medium tracking-[-0.02em]">
+        <h1 className="font-heading text-2xl font-medium tracking-[-0.02em] sm:text-3xl">
           Digital products by {user.name}
         </h1>
         <p className="mt-1.5 max-w-[60ch] text-[15px] text-muted-foreground">
@@ -105,7 +105,7 @@ export default async function StorefrontPage({
           </p>
         )
       ) : (
-        <div className="grid grid-cols-3 gap-5">
+        <ProductGrid>
           {products.map((product, index) => (
             <ProductCard
               key={product.id}
@@ -120,7 +120,7 @@ export default async function StorefrontPage({
               preload={index === 0}
             />
           ))}
-        </div>
+        </ProductGrid>
       )}
     </div>
   )

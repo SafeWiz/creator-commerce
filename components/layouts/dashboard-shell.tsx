@@ -67,7 +67,7 @@ export async function DashboardShell({
           <CeceLauncher />
           <CartBadge />
           <Button variant="outline" size="sm" nativeButton={false} render={<Link href={storefrontPath(user.handle)} />}>
-            <ExternalLink /> View storefront
+            <ExternalLink /> <span className="max-sm:sr-only">View storefront</span>
           </Button>
         </header>
         {!user.emailVerified && <VerifyEmailBanner />}

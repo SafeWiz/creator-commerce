@@ -41,7 +41,7 @@ export function CeceLauncher() {
   return (
     <>
       <Button variant="outline" size="sm" onClick={() => setOpen(true)}>
-        <Sparkles /> Ask Cece
+        <Sparkles /> <span className="max-sm:sr-only">Ask Cece</span>
       </Button>
       <Sheet open={open} onOpenChange={setOpen} modal={false} disablePointerDismissal>
         <SheetContent
