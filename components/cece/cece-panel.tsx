@@ -8,6 +8,7 @@ import { ArrowUp, RotateCcw, Square } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { CeceMessage } from "@/components/cece/cece-message"
+import { parseRateLimited } from "@/lib/cece-errors"
 
 // Matches MAX_QUESTION_CHARS in lib/server/request/cece.ts.
 const MAX_QUESTION_CHARS = 2000
@@ -27,6 +28,34 @@ function errorMessage(error: Error) {
   return APICallError.isInstance(error) && error.message ? error.message : GENERIC_ERROR
 }
 
+/**
+ * The model's provider is rate limiting (see lib/cece-errors.ts): Retry stays
+ * disabled for as long as it asked, counting down. Every new request clears
+ * the chat's error, so each rate limit mounts this afresh.
+ */
+function RateLimitNotice({ seconds, onRetry }: { seconds: number; onRetry: () => void }) {
+  const [left, setLeft] = useState(seconds)
+
+  useEffect(() => {
+    if (left <= 0) return
+    const timer = setTimeout(() => setLeft(left - 1), 1000)
+    return () => clearTimeout(timer)
+  }, [left])
+
+  return (
+    <div role="alert" className="flex items-center gap-2 text-sm text-muted-foreground">
+      <span>
+        {left > 0
+          ? `Cece is busy right now. You can try again in ${left}s.`
+          : "Cece was busy. Try again now."}
+      </span>
+      <Button variant="ghost" size="sm" onClick={onRetry} disabled={left > 0}>
+        <RotateCcw /> Retry
+      </Button>
+    </div>
+  )
+}
+
 export function CecePanel({
   chat,
   pathname,
@@ -42,6 +71,7 @@ export function CecePanel({
   const [input, setInput] = useState("")
   const bottom = useRef<HTMLDivElement>(null)
   const busy = status === "submitted" || status === "streaming"
+  const retryAfter = error ? parseRateLimited(error.message) : null
 
   // Both a fresh send and a retry must carry the page the user is on: the
   // transport has no body of its own, so whichever call skips this sends no
@@ -95,7 +125,12 @@ export function CecePanel({
             />
           ))
         )}
-        {error && (
+        {retryAfter !== null ? (
+          <RateLimitNotice
+            seconds={retryAfter}
+            onRetry={() => void regenerate(requestOptions)}
+          />
+        ) : error && (
           <div role="alert" className="flex items-center gap-2 text-sm text-destructive">
             <span>{errorMessage(error)}</span>
             <Button variant="ghost" size="sm" onClick={() => void regenerate(requestOptions)}>

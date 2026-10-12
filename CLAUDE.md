@@ -583,6 +583,19 @@ body — Cece's own error text, or the route's 401/429/400 message — is shown
 to the user as-is, including a raw `APICallError` body for anything else the
 route sends.
 
+A model rate limit is the one stream error the panel tells apart. The gateway
+caps the model per team per minute (5 requests, as observed for
+`inclusionai/ling-3.1-flash`, and each tool step is a request), and it arrives mid-stream, after the 200, once the
+AI SDK's own retries are spent. `rateLimitRetryAfter`
+(`lib/server/ai/cece/rate-limit.ts`) reads the wait off the 429 — its
+`retry-after` header, else the gateway's "Retry after 8s." message, else 30s
+— and the route's `onError` sends it as `rateLimitedErrorText(seconds)`
+(`lib/cece-errors.ts`), the only channel there is, since useChat turns the
+error chunk into a bare `new Error(errorText)`. The panel reads it back with
+`parseRateLimited` and keeps Retry disabled behind a countdown. The message
+still counts against the daily cap: the row is written before the model is
+called.
+
 A finished tool call renders as a card (`components/cece/cards/`), picked
 by tool name in `cards/index.tsx`; a tool with no card there (the guide)
 keeps the chip, and so does a running, failed or stopped call. The cards

@@ -13,6 +13,7 @@ import {
 } from 'ai'
 import { z } from 'zod'
 
+import { rateLimitedErrorText } from '@/lib/cece-errors'
 import { toAiSdkTools } from '@/lib/server/ai/cece/ai-sdk'
 import {
   CECE_DAILY_MESSAGE_LIMIT,
@@ -21,6 +22,7 @@ import {
   CECE_MODEL,
   ceceInstructions,
 } from '@/lib/server/ai/cece/model'
+import { rateLimitRetryAfter } from '@/lib/server/ai/cece/rate-limit'
 import { recordGenerationWithinLimit } from '@/lib/server/dal/ai-generations'
 import { getUser } from '@/lib/server/request/session'
 
@@ -171,8 +173,14 @@ export async function handleCece(request: Request): Promise<Response> {
     stream: toUIMessageStream({
       stream: result.stream,
       tools,
-      // What the client sees in place of the real error.
-      onError: () => 'Cece ran into a problem answering.',
+      // What the client sees in place of the real error. A rate limit carries
+      // its wait, so the panel can hold Retry until it is over.
+      onError: (error) => {
+        const retryAfter = rateLimitRetryAfter(error)
+        return retryAfter === null
+          ? 'Cece ran into a problem answering.'
+          : rateLimitedErrorText(retryAfter)
+      },
     }),
   })
 }
