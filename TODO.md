@@ -42,11 +42,9 @@
 
 ## Product images
 
-- **No optimistic thumbnails while an image uploads.** The tile appears only
-  once `onClientUploadComplete` returns its url, so "did it work" is answered
-  when the upload finishes rather than when the file is picked. Rendering
-  `URL.createObjectURL(file)` at select time, with per-tile progress, would
-  answer it immediately.
+- ~~**No optimistic thumbnails while an image uploads.**~~ **Done** (`82d0e88`):
+  a dropped image shows at once from a `blob:` url with a spinner while it
+  uploads. A spinner, not per-tile percentage progress.
 
 - **Two upload paths still leak into UploadThing storage.**
   Images no longer do: they stage in `product_image_uploads`, commit on Save,
@@ -122,31 +120,20 @@ Baseline is already in place: no raw `<img>` outside the OG card routes
 every `Image` uses `fill` + `sizes` + `alt`, and the first card of each
 grid and the gallery's first slide `preload`. What is left:
 
-- **`sizes` describes a responsive layout we do not have.**
-  The storefront grid is `grid-cols-3` with no breakpoint and the product page is
-  `grid-cols-[1.2fr_1fr]`; neither ever stacks. Yet the cards declare
-  `(max-width: 768px) 100vw, 360px` and the gallery `(max-width: 1080px) 100vw,
-  620px`, so on a phone the browser fetches a full-viewport variant for a ~117px
-  card. The desktop numbers are off too — the real gallery width is ~545px, not
-  620px. Either make the grids responsive so the `100vw` branch becomes true, or
-  correct the `sizes` values to the widths actually rendered. While there: the
-  `sizes` prop on `ProductCover` is never overridden by any caller, so either
-  wire it up or drop it.
+- ~~**`sizes` describes a responsive layout we do not have.**~~ **Done**
+  (`91c9d2a`, `bbfe562`): grids stack via `ProductGrid`'s container queries,
+  `PRODUCT_CARD_SIZES` and the gallery's `sizes` match the rendered widths, and
+  the cart's thumbnail overrides `ProductCover`'s `sizes` with `96px`.
 
 - **No blur placeholder on remote images.**
   `placeholder="blur"` needs a `blurDataURL`, which is not derived automatically
   for remote URLs. A single shared solid-colour data URL for product covers and
   gallery slides is enough to remove the flash of empty frame.
 
-- **Remaining image knobs in `next.config.ts`.** `formats` (AVIF) and
-  `minimumCacheTTL` (31d) are set; these are still at their defaults:
-  - `remotePatterns` omits `pathname` and `search`, which implies `**` for both.
-    UploadThing serves `/f/<key>`, so `pathname: '/f/**'` and `search: ''` close
-    the gap the docs warn about.
-  - `qualities` defaults to `[75]`; allowing `[50, 75]` lets grid thumbnails drop
-    to `quality={50}`.
-  - `maximumResponseBody` defaults to 50 MB per source fetch, far above anything
-    the product image endpoint accepts — 5 MB is a cheap memory guard.
+- ~~**Remaining image knobs in `next.config.ts`.**~~ **Done** (`bbfe562`):
+  `remotePatterns` pinned to `https://<appId>.ufs.sh/f/**` with `search: ''`,
+  `qualities: [50, 75]` (50 on the 96px thumbnails), `maximumResponseBody` at
+  4 MiB, and `maximumRedirects: 0`.
 
 - **Minor.** The dashboard thumbnails in `components/product-images.tsx` use
   `alt=""`; they sit next to a labelled "Remove image" button so this is
@@ -154,15 +141,10 @@ grid and the gallery's first slide `preload`. What is left:
 
 ## Search (`/explore`)
 
-- **`/explore` is invisible to search engines.** It calls `requireUser()`, so a
-  signed-out visitor — and every crawler — is redirected to `/login`. The
-  marketplace's own browse/search page is the biggest discovery surface it has,
-  and today only storefronts and product pages can be indexed. Making it public
-  means moving it out of `(master)` (the `DashboardShell` assumes a session),
-  handling a signed-out viewer for cart membership and analytics, and then
-  adding it to `app/sitemap.ts` and taking it out of `robots.ts`'s disallow
-  list. Left out of the SEO pass on purpose: it is a product change, not
-  metadata.
+- ~~**`/explore` is invisible to search engines.**~~ **Done**: it lives at
+  `app/explore/` outside `(master)`, renders `DashboardShell` for a signed-in
+  viewer and `ExploreShell` otherwise, is in the sitemap, and is noindex only
+  when it carries a search `q`.
 
 The current implementation is deliberately the throwaway one — `ILIKE '%term%'`,
 ordered by `createdAt`, top 50, no pagination. Three known limits:
@@ -194,10 +176,9 @@ ordered by `createdAt`, top 50, no pagination. Three known limits:
 
 ## SEO
 
-- **No app icons beyond `favicon.ico`.** The `icon` / `apple-icon` file
-  conventions want a real brand asset (at least a 512×512 PNG or an SVG mark);
-  once one exists, dropping `app/icon.png` and `app/apple-icon.png` in is all
-  Next needs.
+- ~~**No app icons beyond `favicon.ico`.**~~ **Done**: `app/icon.tsx`
+  (`505cdc0`, 32×32 tab icon) and `app/apple-icon.tsx` (180×180 home-screen
+  icon) both draw the `Logo` component.
 
 - **The sitemap is one file.** It holds 50,000 urls; past that,
   `generateSitemaps` in `app/sitemap.ts` shards it by id range, and

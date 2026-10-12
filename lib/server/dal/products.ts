@@ -637,16 +637,16 @@ function escapeLikePattern(value: string) {
 }
 
 /**
- * Marketplace-wide product search, for the signed-in /explore page.
+ * Marketplace-wide product search, for the public /explore page.
  *
  * The one read in this module that is deliberately NOT owner-scoped. What makes
  * that safe is that it applies exactly the visibility rule the public storefront
  * does — `status = 'published'` and no tombstone — so nothing reachable here is
- * anything a signed-out visitor couldn't already see at /@handle. The auth gate
- * on the page decides who gets the feature, not what the query may return.
+ * anything a signed-out visitor couldn't already see at /@handle.
  *
- * `viewerId` excludes the caller's own products: a creator browsing the
- * marketplace is shopping, and their own catalogue is one nav item away.
+ * `viewerId`, when given, excludes the caller's own products: a creator browsing
+ * the marketplace is shopping, and their own catalogue is one nav item away.
+ * A signed-out visitor passes none and sees everything.
  *
  * A `query` shorter than MIN_EXPLORE_QUERY_LENGTH is treated as absent rather
  * than as a filter, so a half-typed box browses instead of matching '%a%'. The
@@ -657,7 +657,7 @@ export async function searchPublishedProducts({
   query,
   sort,
 }: {
-  viewerId: string
+  viewerId?: string
   query: string
   sort: ExploreSort
 }): Promise<ExploreProduct[]> {
@@ -688,7 +688,7 @@ export async function searchPublishedProducts({
       and(
         eq(productsTable.status, 'published'),
         isNull(productsTable.deletedAt),
-        ne(productsTable.ownerId, viewerId),
+        viewerId ? ne(productsTable.ownerId, viewerId) : undefined,
         // `and()` drops undefined entries, so no query is simply no clause.
         pattern
           ? or(

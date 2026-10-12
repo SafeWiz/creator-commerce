@@ -88,7 +88,61 @@ test('a product url with the wrong slug or a padded id redirects to the canonica
     }
 })
 
-test('a product named with no ASCII letters is reachable at /product', async ({ page, seed }) => {
+test('a product url without its slug redirects to the canonical url', async ({ request, seed }) => {
+    // setup
+    const seller = await seed.user({ name: 'SEO No Slug' })
+    const product = await seed.product(seller, { name: `SEO No Slug ${seed.tag}` })
+
+    // run
+    const withAt = await request.get(`/@${seller.handle}/${product.id}`, { maxRedirects: 0 })
+    const noAt = await request.get(`/${seller.handle}/${product.id}`, { maxRedirects: 0 })
+    const withQuery = await request.get(`/@${seller.handle}/${product.id}?utm_source=x`, { maxRedirects: 0 })
+
+    // assertions
+    for (const response of [withAt, noAt, withQuery]) {
+        expect(response.status()).toBe(308)
+        expect(locationPath(response.headers().location)).toBe(product.url)
+    }
+    expect(new URL(withQuery.headers().location ?? '', BASE_URL).search).toBe('?utm_source=x')
+})
+
+test('a slug-less product url with a trailing slash lands on the canonical url', async ({ request, seed }) => {
+    // setup
+    const seller = await seed.user({ name: 'SEO Slash' })
+    const product = await seed.product(seller, { name: `SEO Slash ${seed.tag}` })
+    const url = `/@${seller.handle}/${product.id}/`
+
+    // run: two hops by design — Next strips the slash before routing, then the
+    // slug-less page adds the slug
+    const firstHop = await request.get(url, { maxRedirects: 0 })
+    const followed = await request.get(url)
+
+    // assertions
+    expect(firstHop.status()).toBe(308)
+    expect(locationPath(firstHop.headers().location)).toBe(`/@${seller.handle}/${product.id}`)
+    expect(followed.status()).toBe(200)
+    expect(decodeURIComponent(new URL(followed.url()).pathname)).toBe(product.url)
+})
+
+test('a slug-less product url 404s for an unknown id, another seller, or a draft', async ({ request, seed }) => {
+    // setup
+    const seller = await seed.user({ name: 'SEO No Slug Missing' })
+    const other = await seed.user({ name: 'SEO No Slug Other' })
+    const product = await seed.product(seller, { name: `SEO No Slug Missing ${seed.tag}` })
+    const draft = await seed.product(seller, { name: `SEO No Slug Draft ${seed.tag}`, status: 'draft' })
+
+    // run
+    const unknownId = await request.get(`/@${seller.handle}/999999999`, { maxRedirects: 0 })
+    const wrongSeller = await request.get(`/@${other.handle}/${product.id}`, { maxRedirects: 0 })
+    const draftId = await request.get(`/@${seller.handle}/${draft.id}`, { maxRedirects: 0 })
+
+    // assertions
+    for (const response of [unknownId, wrongSeller, draftId]) {
+        expect(response.status()).toBe(404)
+    }
+})
+
+test('a product named with no ASCII letters is reachable at /product',async ({ page, seed }) => {
     // setup: slugify('★★★') is ''
     const seller = await seed.user({ name: 'SEO Stars' })
     const product = await seed.product(seller, { name: '★★★' })

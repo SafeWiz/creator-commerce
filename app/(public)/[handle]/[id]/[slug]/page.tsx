@@ -1,5 +1,4 @@
 import type { Metadata } from "next"
-import { cache } from "react"
 import Link from "next/link"
 import { notFound, permanentRedirect } from "next/navigation"
 import {
@@ -11,8 +10,6 @@ import {
 } from "lucide-react"
 
 import { readCartMembership } from "@/lib/server/request/cart"
-import { getStorefrontProduct } from "@/lib/server/dal/products"
-import { getUserByHandle } from "@/lib/server/dal/users"
 import { getUser } from "@/lib/server/request/session"
 import { appUrl } from "@/lib/server/app-url"
 import { AddToCartButton } from "@/components/add-to-cart-button"
@@ -25,29 +22,9 @@ import { formatPrice } from "@/lib/currency"
 import { productPath, requestedPath, storefrontPath, withSearchParams } from "@/lib/paths"
 import { productJsonLd, serializeJsonLd } from "@/lib/seo/json-ld"
 import { SITE_OPEN_GRAPH } from "@/lib/site"
-import { parseHandleSegment, toMetaDescription } from "@/lib/utils"
+import { toMetaDescription } from "@/lib/utils"
 
-// Resolves the seller from the handle, then the product from that seller, so a
-// product is only reachable under the storefront that actually owns it.
-// cache()d because generateMetadata and the page both need it in one pass.
-//
-// A draft resolves only for its own seller. Everyone else gets null and the
-// page 404s, so a guessed id buys nothing without that seller's session.
-const findProduct = cache(async (handleSegment: string, idSegment: string) => {
-  const id = Number(idSegment)
-  if (!Number.isInteger(id)) return null
-
-  const user = await getUserByHandle(parseHandleSegment(handleSegment))
-  if (!user) return null
-
-  // getUser, not requireUser: the page is public and a signed-out visitor must
-  // still get the published product rather than a redirect to /login.
-  const viewer = await getUser()
-  const product = await getStorefrontProduct(id, user.id, {
-    includeDrafts: viewer?.id === user.id,
-  })
-  return product ? { user, product } : null
-})
+import { findProduct } from "../find-product"
 
 export async function generateMetadata({
   params,

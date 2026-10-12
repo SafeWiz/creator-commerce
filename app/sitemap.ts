@@ -9,7 +9,7 @@ import { escapeXml } from "@/lib/seo/xml"
 // the database once — PG_CONNECTION_STRING is set on every Vercel environment.
 export const revalidate = 3600
 
-// The landing page, every storefront with at least one published product (an
+// The landing page, the marketplace's browse page, every storefront with at least one published product (an
 // empty one is a thin page), and every published product. One file holds
 // 50,000 urls; generateSitemaps sharding waits until that is close (TODO.md).
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
@@ -30,6 +30,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   // ordinary urls come out unchanged — this is for whatever slipped past.
   return [
     { url: escapeXml(appUrl) },
+    { url: escapeXml(`${appUrl}/explore`) },
     ...Array.from(storefronts, ([handle, lastModified]) => ({
       url: escapeXml(`${appUrl}${storefrontPath(handle)}`),
       lastModified,

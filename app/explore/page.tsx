@@ -11,13 +11,37 @@ import {
 } from "@/lib/schemas/explore"
 import { readCartMembership } from "@/lib/server/request/cart"
 import { searchPublishedProducts } from "@/lib/server/dal/products"
-import { requireUser } from "@/lib/server/request/session"
+import { getUser } from "@/lib/server/request/session"
+import { SITE_OPEN_GRAPH } from "@/lib/site"
 import { ProductCard, ProductGrid } from "@/components/product-card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { ExploreSearchInput } from "./explore-search-input"
 
-export const metadata: Metadata = {
-  title: "Explore",
+const TITLE = "Explore"
+const DESCRIPTION =
+  "Browse and search digital products from independent creators. Instant download after checkout."
+
+export async function generateMetadata({
+  searchParams,
+}: PageProps<"/explore">): Promise<Metadata> {
+  const { q } = exploreSearchParamsSchema.parse(await searchParams)
+
+  return {
+    title: TITLE,
+    description: DESCRIPTION,
+    // Every sort and search variant points at the bare page: they list the
+    // same catalogue, and only one url of it belongs in an index.
+    alternates: { canonical: "/explore" },
+    openGraph: {
+      ...SITE_OPEN_GRAPH,
+      title: TITLE,
+      description: DESCRIPTION,
+      url: "/explore",
+    },
+    // A search result page is one of unboundedly many, each a thin slice of the
+    // browse page. Kept out of the index, but its product links still followed.
+    ...(q && { robots: { index: false, follow: true } }),
+  }
 }
 
 const SORT_LABELS: Record<ExploreSort, string> = {
@@ -29,9 +53,10 @@ export default async function ExplorePage({
   searchParams,
 }: PageProps<"/explore">) {
   const { q, sort } = exploreSearchParamsSchema.parse(await searchParams)
-  // The (master) layout's shell already gated this route; this call is for the
-  // id, and getUser() is cache()-wrapped so it costs nothing extra.
-  const viewer = await requireUser()
+  // Public page: a viewer is optional, and only used to leave their own
+  // products out. The layout already resolved it, and getUser() is
+  // cache()-wrapped, so this costs nothing extra.
+  const viewer = await getUser()
 
   return (
     <div className="mx-auto flex max-w-[1120px] flex-col gap-4 p-4 sm:p-6">
@@ -40,7 +65,9 @@ export default async function ExplorePage({
           Explore
         </h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Products published by other creators.
+          {viewer
+            ? "Products published by other creators."
+            : "Digital products published by creators."}
         </p>
       </div>
 
@@ -59,7 +86,7 @@ export default async function ExplorePage({
           so React keeps the current grid up until the next one is ready and the
           box's own spinner carries the pending state. */}
       <Suspense fallback={<ExploreGridSkeleton />}>
-        <ExploreResults viewerId={viewer.id} q={q} sort={sort} />
+        <ExploreResults viewerId={viewer?.id} q={q} sort={sort} />
       </Suspense>
     </div>
   )
@@ -70,7 +97,7 @@ async function ExploreResults({
   q,
   sort,
 }: {
-  viewerId: string
+  viewerId: string | undefined
   q: string
   sort: ExploreSort
 }) {
@@ -93,7 +120,9 @@ async function ExploreResults({
       <p className="py-8 text-center text-[15px] text-muted-foreground">
         {q
           ? `No products match “${q}”.`
-          : "No one else has published anything yet."}
+          : viewerId
+            ? "No one else has published anything yet."
+            : "Nothing has been published yet."}
       </p>
     )
   }
@@ -108,7 +137,7 @@ async function ExploreResults({
             handle={product.sellerHandle}
             sellerId={product.sellerId}
             inCart={inCart(product.id)}
-            // No isOwner: searchPublishedProducts already excludes the
+            // No isOwner: searchPublishedProducts already excludes a signed-in
             // viewer's own products, so nothing here can ever be theirs.
             // Nothing above the grid but the header, so the first cover is the
             // LCP candidate.
