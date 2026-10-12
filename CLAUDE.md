@@ -307,6 +307,12 @@ They are separate tables because images upload `public-read` and product files
 upload `private`. One table would let an image's key be claimed as a product's
 `fileKey`, and the product would sell a publicly fetchable file.
 
+`next/image` optimizes only `https://<appId>.ufs.sh/f/*` with no query
+string, the app id read out of `UPLOADTHING_TOKEN` when `next.config.ts`
+loads — so the token must be present at build time, and a build without one
+allows no remote image at all. Source images over 4 MiB (the route's `4MB`)
+are refused, and redirects are not followed.
+
 Images commit on Save, on both the create and edit pages: the form owns the list
 and `setProductImages` writes it whole, having checked every url against the
 product's current images or a staging row of the same owner.

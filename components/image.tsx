@@ -68,6 +68,11 @@ type LoadingProps = {
 
 export type ImageProps = BaseProps & SizingProps & LoadingProps
 
+// For the 96 px thumbnails (cart, product form). At that size the artifacts are
+// too small to see. Must be one of `images.qualities` in next.config.ts — any
+// other value is snapped to the nearest entry by the loader.
+export const THUMBNAIL_QUALITY = 50
+
 export function Image({ preload, ...props }: ImageProps) {
   return (
     <NextImage
