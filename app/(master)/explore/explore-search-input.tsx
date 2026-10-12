@@ -73,7 +73,7 @@ export function ExploreSearchInput({ initialQuery }: { initialQuery: string }) {
   }, [value, pathname, router, searchParams])
 
   return (
-    <div className="relative w-[280px]">
+    <div className="relative min-w-0 flex-1 sm:w-[280px] sm:flex-none">
       <Search className="pointer-events-none absolute top-1/2 left-2.5 size-[15px] -translate-y-1/2 text-muted-foreground" />
       <Input
         type="search"

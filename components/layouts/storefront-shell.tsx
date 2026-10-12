@@ -17,7 +17,7 @@ export function StorefrontShell({
   return (
     <>
       <header className="sticky top-0 z-10 border-b bg-background">
-        <div className="mx-auto flex max-w-[1080px] items-center gap-3.5 px-6 py-3.5">
+        <div className="mx-auto flex max-w-[1080px] items-center gap-3.5 px-4 py-3.5 sm:px-6">
           <Link href={storefrontPath(seller.handle)} className="flex items-center gap-3">
             {/* Initials only for now: nothing populates user.image yet, and an
                 arbitrary avatar host isn't in next.config's remotePatterns. */}
@@ -35,7 +35,7 @@ export function StorefrontShell({
           </Link>
           <div className="flex-1" />
           <Button variant="outline" size="sm">
-            <Heart /> Wishlist
+            <Heart /> <span className="max-sm:sr-only">Wishlist</span>
           </Button>
           <CartBadge />
           <Button variant="ghost" size="sm" nativeButton={false} render={<Link href="/login" />}>

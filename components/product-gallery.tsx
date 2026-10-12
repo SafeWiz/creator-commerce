@@ -32,7 +32,9 @@ export function ProductGallery({
                 src={url}
                 alt={alt}
                 fill
-                sizes="(max-width: 1080px) 100vw, 620px"
+                // One column below md; above it, the left of the product page's
+                // 1.2fr/1fr grid, at most (1080 - 48 - 32) * 1.2 / 2.2.
+                sizes="(max-width: 767px) calc(100vw - 32px), 546px"
                 // Every slide is in the DOM from the start, just translated out
                 // of the frame — so the browser lazy-loads the ones it can't
                 // see, and the first tap of "next" lands on an empty box. Fetch
@@ -49,7 +51,7 @@ export function ProductGallery({
       </CarouselContent>
 
       {/* The defaults sit outside the frame at -left-12/-right-12, which the
-          page's two-column grid has no room for — pull them inside. */}
+          page's grid has no room for — pull them inside. */}
       {images.length > 1 && (
         <>
           <CarouselPrevious className="left-3" />

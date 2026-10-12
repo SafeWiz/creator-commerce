@@ -8,6 +8,36 @@ import { formatPrice } from "@/lib/currency"
 import { productPath } from "@/lib/paths"
 import { cn } from "@/lib/utils"
 
+// How wide a card renders inside ProductGrid, as a viewport-based `sizes` (the
+// one thing `sizes` cannot read is the grid's own width). Below 480px every
+// layout is one column with a 16px gutter. From 480px up a card is never wider
+// than ~374px: two columns top out at (768 - 20) / 2 just before the third
+// appears, and three at (1120 - 48 - 40) / 3 on /explore's widest grid.
+// Revisit this together with the breakpoints in ProductGrid.
+const PRODUCT_CARD_SIZES = "(max-width: 479px) calc(100vw - 32px), 376px"
+
+// Every product list renders through this, so the columns and the card's
+// `sizes` above stay in step. Columns follow the grid's own width (a container
+// query), not the viewport's: /explore sits beside a sidebar that may be
+// expanded, collapsed or off-canvas, so the viewport alone says little about
+// how much room the grid has.
+export function ProductGrid({
+  className,
+  ...props
+}: React.ComponentProps<"div">) {
+  return (
+    <div className="@container">
+      <div
+        className={cn(
+          "grid grid-cols-1 gap-4 @md:grid-cols-2 @3xl:grid-cols-3 sm:gap-5",
+          className,
+        )}
+        {...props}
+      />
+    </div>
+  )
+}
+
 export function ProductCover({
   images,
   alt,
@@ -38,7 +68,7 @@ export function ProductCover({
         src={cover}
         alt={alt}
         fill
-        sizes={sizes ?? "(max-width: 768px) 100vw, 360px"}
+        sizes={sizes ?? PRODUCT_CARD_SIZES}
         preload={preload}
         className="object-cover"
       />
@@ -111,7 +141,7 @@ export function ProductCard({
         {draft && <DraftBadge className="absolute top-2.5 left-2.5 shadow-sm" />}
       </div>
       <div className="flex flex-1 flex-col gap-1.5 p-4">
-        <span className="font-heading text-[15px] font-medium">
+        <span className="line-clamp-2 font-heading text-[15px] font-medium">
           {product.name}
         </span>
         {product.description && (

@@ -107,7 +107,7 @@ export default async function ProductPage({
   const isOwner = viewer?.id === user.id
 
   return (
-    <div className="mx-auto max-w-[1080px] px-6 pt-6 pb-16">
+    <div className="mx-auto max-w-[1080px] px-4 pt-6 pb-16 sm:px-6">
       {/* Published only: a draft is noindex and only its owner sees it. */}
       {!isDraft && (
         <script
@@ -148,12 +148,12 @@ export default async function ProductPage({
       >
         <ChevronLeft className="size-[15px]" /> All products
       </Link>
-      <div className="grid grid-cols-[1.2fr_1fr] items-start gap-8">
+      <div className="grid grid-cols-1 items-start gap-6 md:grid-cols-[1.2fr_1fr] md:gap-8">
         <ProductGallery images={product.images} alt={product.name} />
         <div className="flex flex-col gap-4">
           <div>
             <div className="flex items-start gap-2.5">
-              <h1 className="font-heading text-[28px] leading-tight font-medium tracking-[-0.02em]">
+              <h1 className="font-heading text-2xl leading-tight sm:text-[28px] font-medium tracking-[-0.02em]">
                 {product.name}
               </h1>
               {isDraft && <DraftBadge className="mt-1.5 shrink-0" />}
