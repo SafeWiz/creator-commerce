@@ -2,8 +2,8 @@ import { cn } from "@/lib/utils"
 
 /**
  * The mark, drawn once. Every place the logo appears renders this component:
- * the app's headers, the OG cards (`lib/server/og/frame.tsx`) and the favicon
- * (`app/icon.tsx`).
+ * the app's headers, the OG cards (`lib/server/og/frame.tsx`), the favicon
+ * (`app/icon.tsx`) and the home-screen icon (`app/apple-icon.tsx`).
  *
  * Without `colors` the arcs take the theme through Tailwind classes. Satori —
  * behind both the OG cards and the favicon — resolves neither classes nor
